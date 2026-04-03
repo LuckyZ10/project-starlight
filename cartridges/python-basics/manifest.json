@@ -1,0 +1,15 @@
+{
+  "id": "python-basics",
+  "title": "Python 基础",
+  "version": "1.0.0",
+  "language": "zh-CN",
+  "contributors": [
+    {"name": "Starlight Team", "role": "author", "quote": "从零开始，点亮每一颗星。"}
+  ],
+  "nodes": [
+    {"id": "N01", "title": "变量与赋值", "file": "nodes/N01-variables.md", "prerequisites": [], "difficulty": 1, "pass_criteria": "能解释变量赋值并写出基本赋值语句"},
+    {"id": "N02", "title": "数据类型", "file": "nodes/N02-types.md", "prerequisites": ["N01"], "difficulty": 1, "pass_criteria": "能区分 str/int/float/list 并正确使用"},
+    {"id": "N03", "title": "控制流", "file": "nodes/N03-control-flow.md", "prerequisites": ["N02"], "difficulty": 2, "pass_criteria": "能写 if/else 和 for/while 循环"}
+  ],
+  "dag": {"entry": "N01", "edges": {"N01": ["N02"], "N02": ["N03"], "N03": []}}
+}
