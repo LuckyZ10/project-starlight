@@ -5,7 +5,7 @@ def test_load_cartridge():
     loader = CartridgeLoader("./cartridges")
     cart = loader.load("python-basics")
     assert cart["id"] == "python-basics"
-    assert len(cart["nodes"]) == 3
+    assert len(cart["nodes"]) == 10
     assert cart["dag"]["entry"] == "N01"
 
 def test_load_node_content():
