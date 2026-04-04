@@ -1,8 +1,12 @@
 # starlight/core/assessor_v2.py
 """V2 Assessor — 策略驱动的多轮考核引擎"""
 from __future__ import annotations
+
+import logging
 from dataclasses import dataclass
 from typing import Callable, Awaitable
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -27,16 +31,12 @@ class AssessorV2:
         self._call_llm: Callable[..., Awaitable[str]] = self._default_llm_call
     
     async def _default_llm_call(self, messages: list[dict]) -> tuple[str, str]:
-        """Call LLM. Returns (system_prompt, response_text).
-
-        We return system_prompt so assess() can reuse it.
-        """
+        """Call LLM via Anthropic-compatible API (智谱). Returns (system_prompt, response_text)."""
         import anthropic
         client = anthropic.AsyncAnthropic(
             api_key=self.llm_api_key,
             base_url=self.llm_base_url or "https://open.bigmodel.cn/api/anthropic",
         )
-        # Split system messages from user/assistant messages
         system_parts = []
         chat_messages = []
         for msg in messages:
@@ -44,13 +44,12 @@ class AssessorV2:
                 system_parts.append(msg["content"])
             else:
                 chat_messages.append(msg)
-        
-        # Ensure at least one user message exists
+
         if not chat_messages:
             chat_messages = [{"role": "user", "content": "开始"}]
-        
+
         system_text = "\n\n".join(system_parts) if system_parts else None
-        
+
         kwargs = {
             "model": self.llm_model,
             "max_tokens": 1024,
@@ -58,9 +57,11 @@ class AssessorV2:
         }
         if system_text:
             kwargs["system"] = system_text
-        
+
         response = await client.messages.create(**kwargs)
-        return response.content[0].text
+        text = response.content[0].text
+        logger.info("LLM response: %s", text[:2000])
+        return text
     
     async def assess(self, node_content: str, pass_criteria: str,
                      session, learner) -> AssessmentResult:

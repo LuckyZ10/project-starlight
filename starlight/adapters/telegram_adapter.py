@@ -34,48 +34,104 @@ def _learning_keyboard():
     ])
 
 
-def _parse_question(text: str) -> tuple[str, list[tuple[str, str]]]:
+def _parse_question(text: str) -> tuple[str, list[tuple[str, str]], bool]:
     """Parse [QUESTION]...[/QUESTION] from LLM response.
-    
-    Returns (display_text, [(label, option_text), ...]).
+
+    Returns (display_text, [(label, option_text), ...], is_multi).
+    Supports both [A] and A. option formats.
+    Tolerates missing [/QUESTION] close tag.
+    Detects [MULTI] tag for multi-select questions.
     """
-    match = re.search(r'\[QUESTION\](.*?)\[/QUESTION\]', text, re.DOTALL)
+    # Detect [MULTI] tag anywhere before or inside [QUESTION]
+    is_multi = bool(re.search(r'\[MULTI\]', text))
+
+    # Try proper close tag first, then tolerate missing/improper close
+    match = re.search(r'\[QUESTION\](.*?)(?:\[/QUESTION\]|\[QUESTION\]|$)', text, re.DOTALL)
     if not match:
-        return text, []
+        return text, [], False
 
     block = match.group(1).strip()
-    # Extract options [A] text
-    option_re = re.compile(r'\[([A-D])\]\s*(.+?)(?=\s*\[[A-D]\]|$)', re.DOTALL)
-    options = [(l, t.strip()) for l, t in option_re.findall(block)]
+    # Remove [MULTI] from block if present
+    block = re.sub(r'\[/?MULTI\]', '', block).strip()
 
-    # Question text = everything before first [A]
-    first = block.find('[')
-    q_text = block[:first].strip() if first > 0 else block
+    # Extract options: [A] text OR A. text OR A、text
+    option_re = re.compile(r'(?:\[([A-D])\]\s*|([A-D])[.、)\s])\s*(.+?)(?=\s*(?:\[[A-D]\]|[A-D][.、)\s])|$)', re.DOTALL)
+    options = []
+    trailing_text = ""
+    for m in option_re.finditer(block):
+        label = m.group(1) or m.group(2)
+        opt_text = m.group(3).strip()
+        if label and opt_text:
+            # Clean up any stray tags from option text
+            opt_text = re.sub(r'\[/?QUESTION\]', '', opt_text).strip()
+            # Only keep the first line for button text
+            lines = opt_text.split('\n')
+            button_text = lines[0].strip()
+            # Remove trailing parenthetical explanations (提示：...)
+            button_text = re.sub(r'\s*[（(].*$', '', button_text).strip()
+            # Keep any extra explanation for display
+            extra = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ""
+            if extra:
+                trailing_text = extra
+            if button_text:
+                options.append((label, button_text))
 
-    # Build display
-    lines = [q_text]
-    for label, opt in options:
-        lines.append(f"  {label}. {opt}")
-    display = '\n'.join(lines)
+    # Question text = everything before first option
+    first_opt = re.search(r'(?:\[[A-D]\]|[A-D][.、)\s])', block)
+    q_text = block[:first_opt.start()].strip() if first_opt else block
+
+    # Build display — question text + any trailing hints (NOT options)
+    display_parts = [q_text]
+    if trailing_text:
+        display_parts.append(f"💡 {trailing_text}")
+    if is_multi:
+        display_parts.append("☑️ 多选题 — 可选多个")
+    display = '\n\n'.join(display_parts)
 
     # Surrounding text (before/after the question block)
     before = text[:text.find('[QUESTION]')].strip()
-    after = text[text.find('[/QUESTION]') + len('[/QUESTION]'):].strip()
+    # Clean [MULTI] from before text
+    before = re.sub(r'\[/?MULTI\]', '', before).strip()
+    end_match = re.search(r'\[/QUESTION\]', text)
+    if end_match:
+        after = text[end_match.end():].strip()
+    else:
+        after = ""
     parts = [p for p in [before, display, after] if p]
     full_display = '\n\n'.join(parts)
 
-    return full_display, options
+    return full_display, options, is_multi
 
 
-def _options_keyboard(options):
-    """Build inline keyboard from question options + free input."""
+def _options_keyboard(options, is_multi=False, selected=None):
+    """Build inline keyboard from question options + free input.
+
+    For multi-select: shows checkmarks on selected items + confirm button.
+    """
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    selected = selected or set()
     buttons = []
     for label, opt_text in options:
-        buttons.append([InlineKeyboardButton(
-            f"{label}. {opt_text}", callback_data=f"ANSWER:{label}"
-        )])
-    buttons.append([InlineKeyboardButton("✏️ 自己写", callback_data="ANSWER:FREE")])
+        if is_multi:
+            prefix = "✅ " if label in selected else "⬜ "
+            buttons.append([InlineKeyboardButton(
+                f"{prefix}{label}. {opt_text}",
+                callback_data=f"MULTI:{label}",
+            )])
+        else:
+            buttons.append([InlineKeyboardButton(
+                f"{label}. {opt_text}", callback_data=f"ANSWER:{label}"
+            )])
+
+    if is_multi:
+        if selected:
+            buttons.append([InlineKeyboardButton(
+                "✅ 确认提交", callback_data="MULTI:SUBMIT"
+            )])
+        buttons.append([InlineKeyboardButton("✏️ 自己写", callback_data="ANSWER:FREE")])
+    else:
+        buttons.append([InlineKeyboardButton("✏️ 自己写", callback_data="ANSWER:FREE")])
+
     return InlineKeyboardMarkup(buttons)
 
 
@@ -92,6 +148,8 @@ class TelegramAdapter(BaseAdapter):
         self._bot = None
         self._application = None
         self._harness = None
+        # Multi-select state: {telegram_id: {message_id: {"selected": set, "options": list}}}
+        self._multi_state: dict[int, dict[int, dict]] = {}
 
     async def send_message(self, user_id: str, text: str) -> None:
         if self._bot:
@@ -139,21 +197,46 @@ class TelegramAdapter(BaseAdapter):
             self._harness = await self._harness_factory()
         return self._harness
 
+    def _save_multi_state(self, telegram_id: int, message_id: int,
+                          options: list, selected: set | None = None):
+        """Save multi-select state for a message."""
+        if telegram_id not in self._multi_state:
+            self._multi_state[telegram_id] = {}
+        self._multi_state[telegram_id][message_id] = {
+            "options": options,
+            "selected": selected or set(),
+        }
+
+    def _get_multi_state(self, telegram_id: int, message_id: int) -> dict | None:
+        """Get multi-select state for a message."""
+        return self._multi_state.get(telegram_id, {}).get(message_id)
+
+    def _clear_multi_state(self, telegram_id: int, message_id: int):
+        """Clear multi-select state after submission."""
+        if telegram_id in self._multi_state:
+            self._multi_state[telegram_id].pop(message_id, None)
+
     # ------------------------------------------------------------------
     # Smart reply with question parsing
     # ------------------------------------------------------------------
     async def _reply(self, reply_func, result: HarnessResult,
-                     cartridge_id: str | None = None) -> None:
+                     cartridge_id: str | None = None,
+                     telegram_id: int | None = None) -> None:
         """Send reply with question buttons or standard keyboard."""
-        display, options = _parse_question(result.text)
+        display, options, is_multi = _parse_question(result.text)
+        logger.info("_reply: options=%d, is_multi=%s, has [QUESTION]=%s",
+                     len(options), is_multi, "[QUESTION]" in result.text)
         if options:
-            kb = _options_keyboard(options)
+            kb = _options_keyboard(options, is_multi=is_multi)
         elif result.state == "learning":
             kb = _learning_keyboard()
         else:
             kb = _main_menu_keyboard()
         try:
-            await reply_func(display, reply_markup=kb)
+            msg = await reply_func(display, reply_markup=kb)
+            # Save multi-select state if needed
+            if options and is_multi and telegram_id and msg and msg.message_id:
+                self._save_multi_state(telegram_id, msg.message_id, options)
         except Exception:
             try:
                 await reply_func(display)
@@ -181,12 +264,54 @@ class TelegramAdapter(BaseAdapter):
         data = query.data
         telegram_id = query.from_user.id
         name = query.from_user.full_name or "Unknown"
+        message_id = query.message.message_id if query.message else None
 
         harness = await self._get_harness()
         user_id = await ensure_user(telegram_id, name)
         cartridge_id = await get_active_cartridge(telegram_id)
 
-        # Answer button click — treat like a text message
+        # --- Multi-select toggle ---
+        if data.startswith("MULTI:"):
+            action = data.split(":", 1)[1]
+            if action == "SUBMIT":
+                # Submit multi-select answers
+                if not cartridge_id:
+                    await query.edit_message_text("请先选择一个卡带。")
+                    return
+                state = self._get_multi_state(telegram_id, message_id) if message_id else None
+                if not state or not state["selected"]:
+                    await query.answer("请先选择至少一个选项", show_alert=True)
+                    return
+                # Build answer string from selected labels
+                selected_labels = sorted(state["selected"])
+                # Map labels to option texts
+                label_map = {l: t for l, t in state["options"]}
+                answer_parts = [f"{l}. {label_map.get(l, l)}" for l in selected_labels]
+                answer = "、".join(selected_labels) + "（" + "、".join(answer_parts) + "）"
+                self._clear_multi_state(telegram_id, message_id)
+                result = await harness.process(user_id=user_id, message=answer, cartridge_id=cartridge_id)
+                await self._reply(query.edit_message_text, result, cartridge_id, telegram_id)
+                return
+            else:
+                # Toggle a selection
+                label = action
+                state = self._get_multi_state(telegram_id, message_id) if message_id else None
+                if not state:
+                    await query.answer("题目已过期，请重新开始", show_alert=True)
+                    return
+                if label in state["selected"]:
+                    state["selected"].discard(label)
+                else:
+                    state["selected"].add(label)
+                # Re-render keyboard with updated selections
+                kb = _options_keyboard(state["options"], is_multi=True, selected=state["selected"])
+                try:
+                    await query.edit_message_reply_markup(reply_markup=kb)
+                except Exception:
+                    pass
+                return
+
+        # --- Single-select answer ---
         if data.startswith("ANSWER:"):
             answer = data.split(":", 1)[1]
             if answer == "FREE":
@@ -195,16 +320,11 @@ class TelegramAdapter(BaseAdapter):
                     reply_markup=None,
                 )
                 return
-            # Map label to full option text
-            display, options = _parse_question("")
-            # Get the option text for the label
-            label_text = answer
-            # Send the answer as a regular message to harness
             if not cartridge_id:
                 await query.edit_message_text("请先选择一个卡带。")
                 return
             result = await harness.process(user_id=user_id, message=answer, cartridge_id=cartridge_id)
-            await self._reply(query.edit_message_text, result, cartridge_id)
+            await self._reply(query.edit_message_text, result, cartridge_id, telegram_id)
             return
 
         if data == "/browse":
@@ -230,7 +350,7 @@ class TelegramAdapter(BaseAdapter):
         elif data.startswith("/start "):
             cart_id = data.split(" ", 1)[1]
             result = await harness.process(user_id=user_id, message="/start", cartridge_id=cart_id)
-            await self._reply(query.edit_message_text, result, cart_id)
+            await self._reply(query.edit_message_text, result, cart_id, telegram_id)
 
         elif data == "/progress":
             result = await harness.process(user_id=user_id, message="/progress", cartridge_id=cartridge_id)
@@ -239,7 +359,7 @@ class TelegramAdapter(BaseAdapter):
 
         elif data == "/back":
             result = await harness.process(user_id=user_id, message="/back", cartridge_id=cartridge_id)
-            await self._reply(query.edit_message_text, result, cartridge_id)
+            await self._reply(query.edit_message_text, result, cartridge_id, telegram_id)
 
         elif data == "/help":
             result = await harness.process(user_id=user_id, message="/help")
@@ -272,7 +392,7 @@ class TelegramAdapter(BaseAdapter):
             return
 
         result = await harness.process(user_id=user_id, message="/start", cartridge_id=cartridge_id)
-        await self._reply(update.message.reply_text, result, cartridge_id)
+        await self._reply(update.message.reply_text, result, cartridge_id, telegram_id)
 
     async def _handle_browse(self, update, context) -> None:
         harness = await self._get_harness()
@@ -350,4 +470,4 @@ class TelegramAdapter(BaseAdapter):
             return
 
         result = await harness.process(user_id=user_id, message=text, cartridge_id=cartridge_id)
-        await self._reply(update.message.reply_text, result, cartridge_id)
+        await self._reply(update.message.reply_text, result, cartridge_id, telegram_id)

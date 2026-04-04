@@ -139,7 +139,7 @@ class LearningHarnessV2:
         
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "我准备好了，开始吧！"},
+            {"role": "user", "content": "我准备好了，开始吧！\n\n⚠️ 请务必使用 [QUESTION]...[/QUESTION] 格式出一道选择题。"},
         ]
         
         try:
