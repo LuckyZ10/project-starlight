@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # LLM
     llm_model: str = "glm-4-flash"
     llm_api_key: str = ""
-    llm_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
+    llm_base_url: str = "https://open.bigmodel.cn/api/anthropic"
 
     # Cartridges
     cartridges_dir: str = "./cartridges"

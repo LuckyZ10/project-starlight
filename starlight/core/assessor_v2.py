@@ -27,20 +27,17 @@ class AssessorV2:
         self._call_llm: Callable[..., Awaitable[str]] = self._default_llm_call
     
     async def _default_llm_call(self, messages: list[dict]) -> str:
-        import litellm
-        # For ZhiPu (BigModel) API, use openai-compatible mode
-        model = self.llm_model
-        if not any(model.startswith(p) for p in ("openai/", "zhipu/")):
-            model = f"openai/{model}"
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "api_key": self.llm_api_key,
-        }
-        if self.llm_base_url:
-            kwargs["api_base"] = self.llm_base_url
-        response = await litellm.acompletion(**kwargs)
-        return response.choices[0].message.content
+        import anthropic
+        client = anthropic.AsyncAnthropic(
+            api_key=self.llm_api_key,
+            base_url=self.llm_base_url or "https://open.bigmodel.cn/api/anthropic",
+        )
+        response = await client.messages.create(
+            model=self.llm_model,
+            max_tokens=1024,
+            messages=messages,
+        )
+        return response.content[0].text
     
     async def assess(self, node_content: str, pass_criteria: str,
                      session, learner) -> AssessmentResult:
