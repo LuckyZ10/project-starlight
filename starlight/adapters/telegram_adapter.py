@@ -4,11 +4,8 @@ from __future__ import annotations
 import logging
 from typing import Callable, Awaitable
 
-from sqlalchemy import select
-
 from starlight.adapters.base import BaseAdapter, HarnessResult
-from starlight.models import User, UserProgress
-from starlight.database import async_session
+from starlight.database import ensure_user, get_active_cartridge
 
 logger = logging.getLogger(__name__)
 
@@ -68,42 +65,16 @@ class TelegramAdapter(BaseAdapter):
             self._harness = await self._harness_factory()
         return self._harness
 
-    async def _ensure_user(self, telegram_id: int, name: str) -> int:
-        """Create user if not exists, return user.id (internal DB id)."""
-        async with async_session() as session:
-            stmt = select(User).where(User.telegram_id == str(telegram_id))
-            result = await session.execute(stmt)
-            user = result.scalar_one_or_none()
-            if user is None:
-                user = User(telegram_id=str(telegram_id), name=name)
-                session.add(user)
-                await session.commit()
-                await session.refresh(user)
-            return user.id
-
-    async def _get_active_cartridge(self, user_id: int) -> str | None:
-        """Look up the user's most recent in_progress cartridge from DB."""
-        async with async_session() as session:
-            stmt = (
-                select(UserProgress)
-                .where(UserProgress.user_id == user_id, UserProgress.status == "in_progress")
-                .order_by(UserProgress.started_at.desc())
-                .limit(1)
-            )
-            result = await session.execute(stmt)
-            progress = result.scalar_one_or_none()
-            return progress.cartridge_id if progress else None
-
     async def _handle_start(self, update, context) -> None:
         harness = await self._get_harness()
         telegram_id = update.effective_user.id
         name = update.effective_user.full_name or "Unknown"
-        user_id = await self._ensure_user(telegram_id, name)
+        user_id = await ensure_user(telegram_id, name)
         cartridge_id = context.args[0] if context.args else None
 
         if not cartridge_id:
             # Check if user has an active cartridge to resume
-            active = await self._get_active_cartridge(user_id)
+            active = await get_active_cartridge(telegram_id)
             if active:
                 await update.message.reply_text(
                     f"🌟 欢迎回来！你正在学习 `{active}`\n\n"
@@ -122,44 +93,53 @@ class TelegramAdapter(BaseAdapter):
 
     async def _handle_browse(self, update, context) -> None:
         harness = await self._get_harness()
-        result = await harness.process(user_id=update.effective_user.id, message="/browse")
+        telegram_id = update.effective_user.id
+        name = update.effective_user.full_name or "Unknown"
+        user_id = await ensure_user(telegram_id, name)
+        result = await harness.process(user_id=user_id, message="/browse")
         await update.message.reply_text(result.text)
 
     async def _handle_progress(self, update, context) -> None:
         harness = await self._get_harness()
         telegram_id = update.effective_user.id
         name = update.effective_user.full_name or "Unknown"
-        user_id = await self._ensure_user(telegram_id, name)
-        cartridge_id = await self._get_active_cartridge(user_id)
+        user_id = await ensure_user(telegram_id, name)
+        cartridge_id = await get_active_cartridge(telegram_id)
         result = await harness.process(user_id=user_id, message="/progress", cartridge_id=cartridge_id)
         await update.message.reply_text(result.text)
 
     async def _handle_stats(self, update, context) -> None:
         harness = await self._get_harness()
-        result = await harness.process(user_id=update.effective_user.id, message="/stats")
+        telegram_id = update.effective_user.id
+        name = update.effective_user.full_name or "Unknown"
+        user_id = await ensure_user(telegram_id, name)
+        result = await harness.process(user_id=user_id, message="/stats")
         await update.message.reply_text(result.text)
 
     async def _handle_review(self, update, context) -> None:
         harness = await self._get_harness()
         telegram_id = update.effective_user.id
         name = update.effective_user.full_name or "Unknown"
-        user_id = await self._ensure_user(telegram_id, name)
-        cartridge_id = await self._get_active_cartridge(user_id)
+        user_id = await ensure_user(telegram_id, name)
+        cartridge_id = await get_active_cartridge(telegram_id)
         result = await harness.process(user_id=user_id, message="/review", cartridge_id=cartridge_id)
         await update.message.reply_text(result.text)
 
     async def _handle_help(self, update, context) -> None:
         harness = await self._get_harness()
-        result = await harness.process(user_id=update.effective_user.id, message="/help")
+        telegram_id = update.effective_user.id
+        name = update.effective_user.full_name or "Unknown"
+        user_id = await ensure_user(telegram_id, name)
+        result = await harness.process(user_id=user_id, message="/help")
         await update.message.reply_text(result.text)
 
     async def _handle_message(self, update, context) -> None:
         harness = await self._get_harness()
         telegram_id = update.effective_user.id
         name = update.effective_user.full_name or "Unknown"
-        user_id = await self._ensure_user(telegram_id, name)
+        user_id = await ensure_user(telegram_id, name)
         text = update.message.text
-        cartridge_id = await self._get_active_cartridge(user_id)
+        cartridge_id = await get_active_cartridge(telegram_id)
 
         if not cartridge_id:
             await update.message.reply_text("请先 /start 选择一个卡带开始学习。")

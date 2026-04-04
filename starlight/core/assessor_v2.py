@@ -26,17 +26,40 @@ class AssessorV2:
         self.strategy = strategy  # TeachingStrategy instance
         self._call_llm: Callable[..., Awaitable[str]] = self._default_llm_call
     
-    async def _default_llm_call(self, messages: list[dict]) -> str:
+    async def _default_llm_call(self, messages: list[dict]) -> tuple[str, str]:
+        """Call LLM. Returns (system_prompt, response_text).
+
+        We return system_prompt so assess() can reuse it.
+        """
         import anthropic
         client = anthropic.AsyncAnthropic(
             api_key=self.llm_api_key,
             base_url=self.llm_base_url or "https://open.bigmodel.cn/api/anthropic",
         )
-        response = await client.messages.create(
-            model=self.llm_model,
-            max_tokens=1024,
-            messages=messages,
-        )
+        # Split system messages from user/assistant messages
+        system_parts = []
+        chat_messages = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_parts.append(msg["content"])
+            else:
+                chat_messages.append(msg)
+        
+        # Ensure at least one user message exists
+        if not chat_messages:
+            chat_messages = [{"role": "user", "content": "开始"}]
+        
+        system_text = "\n\n".join(system_parts) if system_parts else None
+        
+        kwargs = {
+            "model": self.llm_model,
+            "max_tokens": 1024,
+            "messages": chat_messages,
+        }
+        if system_text:
+            kwargs["system"] = system_text
+        
+        response = await client.messages.create(**kwargs)
         return response.content[0].text
     
     async def assess(self, node_content: str, pass_criteria: str,

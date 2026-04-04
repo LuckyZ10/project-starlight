@@ -80,7 +80,8 @@ def _make_update(user_id=42, text="", args=None, full_name="TestUser"):
 @pytest.mark.asyncio
 async def test_handle_start_with_cartridge(adapter, mock_harness):
     update, context = _make_update(args=["python-basics"])
-    with patch.object(adapter, "_ensure_user", new_callable=AsyncMock, return_value=1):
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1), \
+         patch("starlight.adapters.telegram_adapter.get_active_cartridge", new_callable=AsyncMock, return_value=None):
         await adapter._handle_start(update, context)
 
     mock_harness.process.assert_called_once_with(
@@ -92,8 +93,8 @@ async def test_handle_start_with_cartridge(adapter, mock_harness):
 @pytest.mark.asyncio
 async def test_handle_start_without_cartridge_no_active(adapter, mock_harness):
     update, context = _make_update(args=[])
-    with patch.object(adapter, "_ensure_user", new_callable=AsyncMock, return_value=1), \
-         patch.object(adapter, "_get_active_cartridge", new_callable=AsyncMock, return_value=None):
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1), \
+         patch("starlight.adapters.telegram_adapter.get_active_cartridge", new_callable=AsyncMock, return_value=None):
         await adapter._handle_start(update, context)
 
     mock_harness.process.assert_not_called()
@@ -104,8 +105,8 @@ async def test_handle_start_without_cartridge_no_active(adapter, mock_harness):
 @pytest.mark.asyncio
 async def test_handle_start_without_cartridge_has_active(adapter, mock_harness):
     update, context = _make_update(args=[])
-    with patch.object(adapter, "_ensure_user", new_callable=AsyncMock, return_value=1), \
-         patch.object(adapter, "_get_active_cartridge", new_callable=AsyncMock, return_value="python-basics"):
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1), \
+         patch("starlight.adapters.telegram_adapter.get_active_cartridge", new_callable=AsyncMock, return_value="python-basics"):
         await adapter._handle_start(update, context)
 
     mock_harness.process.assert_not_called()
@@ -116,28 +117,30 @@ async def test_handle_start_without_cartridge_has_active(adapter, mock_harness):
 @pytest.mark.asyncio
 async def test_handle_browse(adapter, mock_harness):
     update, context = _make_update()
-    await adapter._handle_browse(update, context)
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1):
+        await adapter._handle_browse(update, context)
 
     mock_harness.process.assert_called_once_with(
-        user_id=42, message="/browse"
+        user_id=1, message="/browse"
     )
 
 
 @pytest.mark.asyncio
 async def test_handle_help(adapter, mock_harness):
     update, context = _make_update()
-    await adapter._handle_help(update, context)
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1):
+        await adapter._handle_help(update, context)
 
     mock_harness.process.assert_called_once_with(
-        user_id=42, message="/help"
+        user_id=1, message="/help"
     )
 
 
 @pytest.mark.asyncio
 async def test_handle_progress_with_cartridge(adapter, mock_harness):
     update, context = _make_update()
-    with patch.object(adapter, "_ensure_user", new_callable=AsyncMock, return_value=1), \
-         patch.object(adapter, "_get_active_cartridge", new_callable=AsyncMock, return_value="python-basics"):
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1), \
+         patch("starlight.adapters.telegram_adapter.get_active_cartridge", new_callable=AsyncMock, return_value="python-basics"):
         await adapter._handle_progress(update, context)
 
     mock_harness.process.assert_called_once_with(
@@ -148,8 +151,8 @@ async def test_handle_progress_with_cartridge(adapter, mock_harness):
 @pytest.mark.asyncio
 async def test_handle_progress_without_cartridge(adapter, mock_harness):
     update, context = _make_update()
-    with patch.object(adapter, "_ensure_user", new_callable=AsyncMock, return_value=1), \
-         patch.object(adapter, "_get_active_cartridge", new_callable=AsyncMock, return_value=None):
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1), \
+         patch("starlight.adapters.telegram_adapter.get_active_cartridge", new_callable=AsyncMock, return_value=None):
         await adapter._handle_progress(update, context)
 
     mock_harness.process.assert_called_once_with(
@@ -160,8 +163,8 @@ async def test_handle_progress_without_cartridge(adapter, mock_harness):
 @pytest.mark.asyncio
 async def test_handle_message_with_cartridge(adapter, mock_harness):
     update, context = _make_update(text="变量是存数据的")
-    with patch.object(adapter, "_ensure_user", new_callable=AsyncMock, return_value=1), \
-         patch.object(adapter, "_get_active_cartridge", new_callable=AsyncMock, return_value="python-basics"):
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1), \
+         patch("starlight.adapters.telegram_adapter.get_active_cartridge", new_callable=AsyncMock, return_value="python-basics"):
         await adapter._handle_message(update, context)
 
     mock_harness.process.assert_called_once_with(
@@ -172,8 +175,8 @@ async def test_handle_message_with_cartridge(adapter, mock_harness):
 @pytest.mark.asyncio
 async def test_handle_message_without_cartridge(adapter, mock_harness):
     update, context = _make_update(text="随便说说")
-    with patch.object(adapter, "_ensure_user", new_callable=AsyncMock, return_value=1), \
-         patch.object(adapter, "_get_active_cartridge", new_callable=AsyncMock, return_value=None):
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1), \
+         patch("starlight.adapters.telegram_adapter.get_active_cartridge", new_callable=AsyncMock, return_value=None):
         await adapter._handle_message(update, context)
 
     mock_harness.process.assert_not_called()
@@ -189,10 +192,11 @@ async def test_handle_message_without_cartridge(adapter, mock_harness):
 @pytest.mark.asyncio
 async def test_handle_stats(adapter, mock_harness):
     update, context = _make_update()
-    await adapter._handle_stats(update, context)
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1):
+        await adapter._handle_stats(update, context)
 
     mock_harness.process.assert_called_once_with(
-        user_id=42, message="/stats"
+        user_id=1, message="/stats"
     )
     update.message.reply_text.assert_called_once_with("测试回复")
 
@@ -200,8 +204,8 @@ async def test_handle_stats(adapter, mock_harness):
 @pytest.mark.asyncio
 async def test_handle_review(adapter, mock_harness):
     update, context = _make_update()
-    with patch.object(adapter, "_ensure_user", new_callable=AsyncMock, return_value=1), \
-         patch.object(adapter, "_get_active_cartridge", new_callable=AsyncMock, return_value=None):
+    with patch("starlight.adapters.telegram_adapter.ensure_user", new_callable=AsyncMock, return_value=1), \
+         patch("starlight.adapters.telegram_adapter.get_active_cartridge", new_callable=AsyncMock, return_value=None):
         await adapter._handle_review(update, context)
 
     mock_harness.process.assert_called_once_with(

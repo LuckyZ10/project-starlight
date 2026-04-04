@@ -37,8 +37,7 @@ async def create_harness() -> LearningHarnessV2:
         llm_base_url=getattr(settings, 'llm_base_url', ''),
         strategy=strategy,
     )
-    session = async_session()
-    progress_mgr = ProgressManager(session)
+    progress_mgr = DatabaseProgressManager()
     tribute = TributeEngine()
     return LearningHarnessV2(
         cartridge_loader=loader,

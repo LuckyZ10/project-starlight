@@ -51,6 +51,8 @@ class LearningHarnessV2:
             return await self._handle_browse()
         if message == "/help":
             return self._handle_help()
+        if message == "/progress":
+            return await self._handle_progress(user_id, cartridge_id)
         if message == "/review":
             return await self._handle_review_cards(user_id)
         if message == "/stats":
@@ -65,6 +67,10 @@ class LearningHarnessV2:
         session = self.get_session(user_id, cartridge_id)
         if session is None:
             return HarnessResult(text="请先 /start 选择一个卡带", state="idle")
+        
+        # /back — 拉回正轨，聚焦核心知识点
+        if message == "/back":
+            return await self._handle_back(user_id, cartridge_id, session, learner)
         
         # 记录用户回答
         session.add_exchange("user", message)
@@ -228,6 +234,93 @@ class LearningHarnessV2:
             state="idle",
         )
     
+    async def _handle_back(self, user_id, cartridge_id, session, learner) -> HarnessResult:
+        """拉回正轨 — 重新聚焦到当前节点的核心知识点"""
+        if session is None:
+            return HarnessResult(text="请先 /start 选择一个卡带", state="idle")
+        
+        cart = self.cartridges.load(cartridge_id)
+        node = self.cartridges.get_node_by_id(cart, session.current_node)
+        content = self.cartridges.load_node_content(cartridge_id, node["file"])
+        
+        # 让 LLM 重新聚焦
+        session.add_exchange("user", "/back（请回到当前知识点）")
+        
+        messages = [
+            {"role": "system", "content": f"你是一个教学助手。用户觉得跑偏了，请回到核心知识点。"},
+            {"role": "system", "content": f"当前知识点：{node['title']}"},
+            {"role": "system", "content": f"知识内容：{content}"},
+            {"role": "system", "content": f"通过标准：{node['pass_criteria']}"},
+            {"role": "system", "content": "请用2-3句话总结当前知识点的核心，然后问一个紧扣通过标准的问题。"},
+        ]
+        
+        try:
+            response = await self.assessor._call_llm(messages)
+            session.add_exchange("assistant", response)
+            return HarnessResult(
+                text=f"🎯 回到正轨！\n\n{response}",
+                state="learning",
+            )
+        except Exception:
+            return HarnessResult(
+                text=f"🎯 当前知识点：**{node['title']}**\n\n通过标准：{node['pass_criteria']}\n\n准备好了就回答吧！",
+                state="learning",
+            )
+    
+    async def _handle_progress(self, user_id: int, cartridge_id: str | None) -> HarnessResult:
+        """显示学习进度地图 — 已完成、当前、待学习"""
+        if not cartridge_id:
+            return HarnessResult(text="请先选择一个卡带。用 /browse 查看可用卡带。", state="idle")
+        
+        cart = self.cartridges.load(cartridge_id)
+        progress = await self.progress.get_progress(user_id, cartridge_id)
+        
+        if progress is None:
+            return HarnessResult(text="你还没开始这个卡带。用 /start 开始吧！", state="idle")
+        
+        # Build progress map
+        completed_nodes = set()
+        current_node_id = progress.current_node
+        
+        # Walk the DAG to find completed nodes (before current)
+        dag = cart.get("dag", {})
+        edges = dag.get("edges", {})
+        entry = dag.get("entry", "")
+        
+        # Simple BFS to find nodes before current
+        visited = set()
+        queue = [entry]
+        while queue:
+            nid = queue.pop(0)
+            if nid == current_node_id:
+                break
+            if nid not in visited:
+                visited.add(nid)
+                completed_nodes.add(nid)
+                queue.extend(edges.get(nid, []))
+        
+        # Render map
+        lines = [f"🗺️ **{cart['title']}** 学习进度\n"]
+        for node in cart["nodes"]:
+            nid = node["id"]
+            if nid in completed_nodes:
+                lines.append(f"  ✅ {node['title']}")
+            elif nid == current_node_id:
+                lines.append(f"  📍 {node['title']} ← 你在这里")
+                lines.append(f"     📋 通过标准：{node['pass_criteria']}")
+            else:
+                lines.append(f"  ⬜ {node['title']}")
+        
+        total = len(cart["nodes"])
+        done = len(completed_nodes)
+        pct = int(done / total * 100) if total > 0 else 0
+        lines.append(f"\n📊 进度：{done}/{total}（{pct}%）")
+        
+        status_text = "学习中" if progress.status == "in_progress" else progress.status
+        lines.append(f"📌 状态：{status_text}")
+        
+        return HarnessResult(text="\n".join(lines), state=progress.status)
+    
     # 复用 V1 的 browse/help
     async def _handle_browse(self) -> HarnessResult:
         cartridges = self.cartridges.list_cartridges()
@@ -245,15 +338,17 @@ class LearningHarnessV2:
     def _handle_help(self) -> HarnessResult:
         return HarnessResult(
             text=(
-                "🌟 星光学习机 V2\n\n"
+                "🌟 **星光学习机 V2**\n\n"
                 "指令：\n"
                 "/browse — 浏览卡带\n"
                 "/start <ID> — 开始学习\n"
+                "/progress — 学习进度地图\n"
+                "/back — 拉回正轨（跑偏时用）\n"
                 "/stats — 学习统计\n"
                 "/review — 复习到期内容\n"
                 "/help — 帮助\n\n"
-                "💡 直接输入文字 = 回答考核问题\n"
-                "系统会根据你的水平自动调整教学策略"
+                "💡 直接输入文字 = 回答问题\n"
+                "🎯 LLM 会自由出题，但必须覆盖通过标准才算 PASS"
             ),
             state="idle",
         )

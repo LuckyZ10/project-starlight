@@ -70,35 +70,24 @@ class DatabaseProgressManager:
 
     Each method opens its own short-lived ``AsyncSession`` so the
     long-lived harness never holds a stale connection.
+    
+    Expects ``user_id`` to be the internal ``users.id`` (not telegram_id).
+    The TelegramAdapter calls ``ensure_user()`` before invoking the harness,
+    so the user row always exists.
     """
-
-    @staticmethod
-    async def _resolve_user_id(session: AsyncSession, telegram_id: int) -> int:
-        stmt = select(User).where(User.telegram_id == str(telegram_id))
-        result = await session.execute(stmt)
-        user = result.scalar_one_or_none()
-        if user is None:
-            raise ValueError(
-                f"User with telegram_id={telegram_id} not found – call ensure_user first"
-            )
-        return user.id
 
     async def get_progress(self, user_id: int, cartridge_id: str):
         async with async_session() as session:
-            uid = await self._resolve_user_id(session, user_id)
-            return await ProgressManager(session).get_progress(uid, cartridge_id)
+            return await ProgressManager(session).get_progress(user_id, cartridge_id)
 
     async def start_cartridge(self, user_id: int, cartridge_id: str, entry_node: str = "N01"):
         async with async_session() as session:
-            uid = await self._resolve_user_id(session, user_id)
-            return await ProgressManager(session).start_cartridge(uid, cartridge_id, entry_node)
+            return await ProgressManager(session).start_cartridge(user_id, cartridge_id, entry_node)
 
     async def advance_node(self, user_id: int, cartridge_id: str, next_node: str):
         async with async_session() as session:
-            uid = await self._resolve_user_id(session, user_id)
-            return await ProgressManager(session).advance_node(uid, cartridge_id, next_node)
+            return await ProgressManager(session).advance_node(user_id, cartridge_id, next_node)
 
     async def complete_cartridge(self, user_id: int, cartridge_id: str):
         async with async_session() as session:
-            uid = await self._resolve_user_id(session, user_id)
-            return await ProgressManager(session).complete_cartridge(uid, cartridge_id)
+            return await ProgressManager(session).complete_cartridge(user_id, cartridge_id)
