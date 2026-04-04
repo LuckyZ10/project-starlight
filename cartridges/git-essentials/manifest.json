@@ -1,0 +1,28 @@
+{
+  "id": "git-essentials",
+  "title": "Git 基础",
+  "version": "1.0.0",
+  "language": "zh-CN",
+  "contributors": [
+    {"name": "Starlight Team", "role": "author", "quote": "版本控制是开发者的超能力。"}
+  ],
+  "nodes": [
+    {"id": "N01", "title": "什么是 Git", "file": "nodes/N01-what-is-git.md", "prerequisites": [], "difficulty": 1, "pass_criteria": "能解释版本控制的概念和 Git 的基本作用"},
+    {"id": "N02", "title": "初始化仓库", "file": "nodes/N02-repo-init.md", "prerequisites": ["N01"], "difficulty": 1, "pass_criteria": "能用 git init 创建仓库、理解工作区概念"},
+    {"id": "N03", "title": "暂存与提交", "file": "nodes/N03-stage-commit.md", "prerequisites": ["N02"], "difficulty": 2, "pass_criteria": "能用 git add 和 git commit 暂存和提交更改"},
+    {"id": "N04", "title": "分支", "file": "nodes/N04-branch.md", "prerequisites": ["N03"], "difficulty": 2, "pass_criteria": "能创建、切换和删除分支"},
+    {"id": "N05", "title": "合并", "file": "nodes/N05-merge.md", "prerequisites": ["N04"], "difficulty": 3, "pass_criteria": "能合并分支、处理简单冲突"},
+    {"id": "N06", "title": "远程仓库", "file": "nodes/N06-remote.md", "prerequisites": ["N03"], "difficulty": 3, "pass_criteria": "能 clone、push、pull 远程仓库"}
+  ],
+  "dag": {
+    "entry": "N01",
+    "edges": {
+      "N01": ["N02"],
+      "N02": ["N03"],
+      "N03": ["N04", "N06"],
+      "N04": ["N05"],
+      "N05": [],
+      "N06": []
+    }
+  }
+}
