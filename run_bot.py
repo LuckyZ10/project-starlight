@@ -18,7 +18,8 @@ from starlight.core.assessor_v2 import AssessorV2
 from starlight.core.contributor import TributeEngine
 from starlight.core.harness_v2 import LearningHarnessV2
 from starlight.core.strategies import get_strategy
-from starlight.main import MockProgressManager
+from starlight.core.progress import ProgressManager
+from starlight.database import init_db, async_session
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 async def create_harness() -> LearningHarnessV2:
-    """Build a fully-wired LearningHarnessV2 with adaptive strategy."""
+    """Build a fully-wired LearningHarnessV2 with adaptive strategy and real DB."""
     loader = CartridgeLoader(settings.cartridges_dir)
     strategy = get_strategy("adaptive")
     assessor = AssessorV2(
@@ -37,7 +38,8 @@ async def create_harness() -> LearningHarnessV2:
         llm_base_url=getattr(settings, 'llm_base_url', ''),
         strategy=strategy,
     )
-    progress_mgr = MockProgressManager()
+    session = async_session()
+    progress_mgr = ProgressManager(session)
     tribute = TributeEngine()
     return LearningHarnessV2(
         cartridge_loader=loader,
@@ -55,6 +57,10 @@ async def main() -> None:
             "Export it as an environment variable before running."
         )
         sys.exit(1)
+
+    # Initialize database tables
+    await init_db()
+    logger.info("Database initialized")
 
     adapter = TelegramAdapter(
         harness_factory=create_harness,
