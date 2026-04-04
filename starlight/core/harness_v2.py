@@ -112,15 +112,14 @@ class LearningHarnessV2:
         # 更新进度
         await self.progress.start_cartridge(user_id, cartridge_id, entry["id"])
         
-        # 用策略生成开场白（不直接甩教材）
-        opening = strategy.get_opening_message(entry["title"], content, learner)
-        
-        # 记录开场白
+        # 记录内容到会话（不发给用户，给 LLM 参考）
         session.add_exchange("system", f"知识内容：{content}")
         
-        # 触发第一个问题：让 LLM 基于内容生成一个引导性问题
+        # 让 LLM 生成第一个小问题（不甩教材）
         first_question = await self._generate_first_question(content, entry["pass_criteria"], learner, session)
         session.add_exchange("assistant", first_question)
+        
+        opening = strategy.get_opening_message(entry["title"], content, learner)
         
         return HarnessResult(
             text=f"{opening}\n\n{first_question}",
@@ -128,20 +127,20 @@ class LearningHarnessV2:
         )
     
     async def _generate_first_question(self, content, pass_criteria, learner, session) -> str:
-        """让 LLM 生成第一个引导性问题"""
+        """让 LLM 生成第一个引导性小问题（不甩教材）"""
         strategy = self._get_strategy()
         system_prompt = await strategy.build_system_prompt(content, pass_criteria, learner, session)
         
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "我准备好了，请出一个场景题来考考我。"}
+            {"role": "user", "content": "我准备好了，开始吧！"},
         ]
         
         try:
             response = await self.assessor._call_llm(messages)
             return response
         except Exception:
-            return f"来看这个场景：\n\n{content}\n\n你能用自己的话解释一下这里的核心概念吗？"
+            return "我们来聊一个概念：在编程里，`=` 是什么意思？跟数学里的等号一样吗？"
     
     async def _handle_pass(self, user_id, cartridge_id, cart, node, result, session, learner) -> HarnessResult:
         next_nodes = self.cartridges.get_next_nodes(cart, node["id"])

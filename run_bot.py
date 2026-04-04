@@ -18,8 +18,7 @@ from starlight.core.assessor_v2 import AssessorV2
 from starlight.core.contributor import TributeEngine
 from starlight.core.harness_v2 import LearningHarnessV2
 from starlight.core.strategies import get_strategy
-from starlight.core.progress import ProgressManager
-from starlight.database import init_db, async_session
+from starlight.database import DatabaseProgressManager, init_db
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
