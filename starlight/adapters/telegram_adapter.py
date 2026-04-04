@@ -10,6 +10,35 @@ from starlight.database import ensure_user, get_active_cartridge
 logger = logging.getLogger(__name__)
 
 
+def _main_menu_keyboard():
+    """Default inline keyboard for main menu / idle state."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📚 浏览卡带", callback_data="/browse"),
+            InlineKeyboardButton("📊 我的进度", callback_data="/progress"),
+        ],
+        [
+            InlineKeyboardButton("❓ 帮助", callback_data="/help"),
+        ],
+    ])
+
+
+def _learning_keyboard():
+    """Inline keyboard shown during active learning."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📊 进度", callback_data="/progress"),
+            InlineKeyboardButton("🎯 拉回正轨", callback_data="/back"),
+        ],
+        [
+            InlineKeyboardButton("📚 换卡带", callback_data="/browse"),
+            InlineKeyboardButton("❓ 帮助", callback_data="/help"),
+        ],
+    ])
+
+
 class TelegramAdapter(BaseAdapter):
     """Telegram Bot adapter for Starlight V2."""
 
@@ -27,7 +56,8 @@ class TelegramAdapter(BaseAdapter):
     async def start(self, mode: str = "polling") -> None:
         from telegram import Update
         from telegram.ext import (
-            ApplicationBuilder, CommandHandler, MessageHandler, filters,
+            ApplicationBuilder, CommandHandler, MessageHandler,
+            CallbackQueryHandler, filters,
         )
 
         self._application = (
@@ -43,6 +73,8 @@ class TelegramAdapter(BaseAdapter):
         self._application.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message)
         )
+        # Inline button callbacks
+        self._application.add_handler(CallbackQueryHandler(self._handle_callback))
 
         self._bot = self._application.bot
 
@@ -65,6 +97,74 @@ class TelegramAdapter(BaseAdapter):
             self._harness = await self._harness_factory()
         return self._harness
 
+    # ------------------------------------------------------------------
+    # Callback query handler (inline button clicks)
+    # ------------------------------------------------------------------
+    async def _handle_callback(self, update, context) -> None:
+        """Handle inline keyboard button presses."""
+        query = update.callback_query
+        await query.answer()
+
+        data = query.data
+        telegram_id = query.from_user.id
+        name = query.from_user.full_name or "Unknown"
+
+        harness = await self._get_harness()
+        user_id = await ensure_user(telegram_id, name)
+        cartridge_id = await get_active_cartridge(telegram_id)
+
+        if data == "/browse":
+            result = await harness.process(user_id=user_id, message="/browse")
+            # Build cartridge buttons
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            from starlight.core.cartridge import CartridgeLoader
+            from starlight.config import settings
+            loader = CartridgeLoader(settings.cartridges_dir)
+            buttons = []
+            for cid in loader.list_cartridges():
+                try:
+                    cart = loader.load(cid)
+                    buttons.append([InlineKeyboardButton(
+                        f"🎮 {cart['title']}", callback_data=f"/start {cid}"
+                    )])
+                except Exception:
+                    pass
+            await query.edit_message_text(
+                result.text,
+                reply_markup=InlineKeyboardMarkup(buttons) if buttons else None,
+            )
+
+        elif data.startswith("/start "):
+            cart_id = data.split(" ", 1)[1]
+            result = await harness.process(user_id=user_id, message="/start", cartridge_id=cart_id)
+            await query.edit_message_text(
+                result.text,
+                reply_markup=_learning_keyboard() if result.state == "learning" else None,
+            )
+
+        elif data == "/progress":
+            result = await harness.process(user_id=user_id, message="/progress", cartridge_id=cartridge_id)
+            kb = _learning_keyboard() if cartridge_id else _main_menu_keyboard()
+            await query.edit_message_text(result.text, reply_markup=kb)
+
+        elif data == "/back":
+            result = await harness.process(user_id=user_id, message="/back", cartridge_id=cartridge_id)
+            await query.edit_message_text(
+                result.text,
+                reply_markup=_learning_keyboard(),
+            )
+
+        elif data == "/help":
+            result = await harness.process(user_id=user_id, message="/help")
+            await query.edit_message_text(result.text, reply_markup=_main_menu_keyboard())
+
+        else:
+            await query.edit_message_text("未知操作")
+
+    # ------------------------------------------------------------------
+    # Command handlers
+    # ------------------------------------------------------------------
+
     async def _handle_start(self, update, context) -> None:
         harness = await self._get_harness()
         telegram_id = update.effective_user.id
@@ -73,23 +173,22 @@ class TelegramAdapter(BaseAdapter):
         cartridge_id = context.args[0] if context.args else None
 
         if not cartridge_id:
-            # Check if user has an active cartridge to resume
             active = await get_active_cartridge(telegram_id)
             if active:
                 await update.message.reply_text(
-                    f"🌟 欢迎回来！你正在学习 `{active}`\n\n"
-                    "继续回答上一题，或用 /progress 查看进度"
+                    f"🌟 欢迎回来！你正在学习 `{active}`\n\n继续回答上一题，或用 /progress 查看进度",
+                    reply_markup=_learning_keyboard(),
                 )
             else:
                 await update.message.reply_text(
-                    "🌟 欢迎来到星光学习机！\n\n"
-                    "用 /browse 查看可用卡带\n"
-                    "用 /start <卡带ID> 开始学习"
+                    "🌟 欢迎来到星光学习机！\n\n选择一个卡带开始学习吧 👇",
+                    reply_markup=_main_menu_keyboard(),
                 )
             return
 
         result = await harness.process(user_id=user_id, message="/start", cartridge_id=cartridge_id)
-        await update.message.reply_text(result.text)
+        kb = _learning_keyboard() if result.state == "learning" else _main_menu_keyboard()
+        await update.message.reply_text(result.text, reply_markup=kb)
 
     async def _handle_browse(self, update, context) -> None:
         harness = await self._get_harness()
@@ -97,7 +196,25 @@ class TelegramAdapter(BaseAdapter):
         name = update.effective_user.full_name or "Unknown"
         user_id = await ensure_user(telegram_id, name)
         result = await harness.process(user_id=user_id, message="/browse")
-        await update.message.reply_text(result.text)
+
+        # Add cartridge selection buttons
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        from starlight.core.cartridge import CartridgeLoader
+        from starlight.config import settings
+        loader = CartridgeLoader(settings.cartridges_dir)
+        buttons = []
+        for cid in loader.list_cartridges():
+            try:
+                cart = loader.load(cid)
+                buttons.append([InlineKeyboardButton(
+                    f"🎮 {cart['title']}", callback_data=f"/start {cid}"
+                )])
+            except Exception:
+                pass
+        await update.message.reply_text(
+            result.text,
+            reply_markup=InlineKeyboardMarkup(buttons) if buttons else None,
+        )
 
     async def _handle_progress(self, update, context) -> None:
         harness = await self._get_harness()
@@ -106,7 +223,8 @@ class TelegramAdapter(BaseAdapter):
         user_id = await ensure_user(telegram_id, name)
         cartridge_id = await get_active_cartridge(telegram_id)
         result = await harness.process(user_id=user_id, message="/progress", cartridge_id=cartridge_id)
-        await update.message.reply_text(result.text)
+        kb = _learning_keyboard() if cartridge_id else _main_menu_keyboard()
+        await update.message.reply_text(result.text, reply_markup=kb)
 
     async def _handle_stats(self, update, context) -> None:
         harness = await self._get_harness()
@@ -114,7 +232,7 @@ class TelegramAdapter(BaseAdapter):
         name = update.effective_user.full_name or "Unknown"
         user_id = await ensure_user(telegram_id, name)
         result = await harness.process(user_id=user_id, message="/stats")
-        await update.message.reply_text(result.text)
+        await update.message.reply_text(result.text, reply_markup=_main_menu_keyboard())
 
     async def _handle_review(self, update, context) -> None:
         harness = await self._get_harness()
@@ -123,7 +241,7 @@ class TelegramAdapter(BaseAdapter):
         user_id = await ensure_user(telegram_id, name)
         cartridge_id = await get_active_cartridge(telegram_id)
         result = await harness.process(user_id=user_id, message="/review", cartridge_id=cartridge_id)
-        await update.message.reply_text(result.text)
+        await update.message.reply_text(result.text, reply_markup=_main_menu_keyboard())
 
     async def _handle_help(self, update, context) -> None:
         harness = await self._get_harness()
@@ -131,7 +249,7 @@ class TelegramAdapter(BaseAdapter):
         name = update.effective_user.full_name or "Unknown"
         user_id = await ensure_user(telegram_id, name)
         result = await harness.process(user_id=user_id, message="/help")
-        await update.message.reply_text(result.text)
+        await update.message.reply_text(result.text, reply_markup=_main_menu_keyboard())
 
     async def _handle_message(self, update, context) -> None:
         harness = await self._get_harness()
@@ -142,8 +260,12 @@ class TelegramAdapter(BaseAdapter):
         cartridge_id = await get_active_cartridge(telegram_id)
 
         if not cartridge_id:
-            await update.message.reply_text("请先 /start 选择一个卡带开始学习。")
+            await update.message.reply_text(
+                "请先选择一个卡带开始学习 👇",
+                reply_markup=_main_menu_keyboard(),
+            )
             return
 
         result = await harness.process(user_id=user_id, message=text, cartridge_id=cartridge_id)
-        await update.message.reply_text(result.text)
+        kb = _learning_keyboard() if result.state == "learning" else _main_menu_keyboard()
+        await update.message.reply_text(result.text, reply_markup=kb)
