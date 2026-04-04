@@ -1,66 +1,60 @@
 # starlight/core/strategies.py
 """可插拔教学策略系统 — 融合启智 12 个教学方法"""
 from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from typing import Any
 
 
 class TeachingStrategy(ABC):
     """教学策略基类"""
-
+    
     name: str = "base"
     description: str = ""
-
+    
     @abstractmethod
-    async def build_system_prompt(self, node_content: str, pass_criteria: str,
-                                  learner: Any, session: Any) -> str:
+    async def build_system_prompt(self, node_content: str, pass_criteria: str, 
+                                   learner: Any, session: Any) -> str:
         """构建 LLM system prompt"""
-
+    
     @abstractmethod
-    def should_pass(self, llm_response: str, turn_count: int, max_turns: int,
+    def should_pass(self, llm_response: str, turn_count: int, max_turns: int, 
                     learner: Any) -> tuple[bool, str]:
         """解析 LLM 回复，决定是否通过。返回 (passed, feedback)"""
-
-    def get_opening_message(self, node_title: str, node_content: str,
-                            learner: Any) -> str:
+    
+    def get_opening_message(self, node_title: str, node_content: str, learner: Any) -> str:
         """生成开场白（不直接甩教材）"""
-        return (
-            f"📚 今天我们来学习「{node_title}」\n\n"
-            f"我准备了一个场景来考考你，准备好了吗？直接回答就好！"
-        )
+        return f"📚 今天我们来学习「{node_title}」\n\n我准备了一个场景来考考你，准备好了吗？直接回答就好！"
 
 
 class SocraticStrategy(TeachingStrategy):
-    """苏格拉底策略 — 通过提问引导学习者自己发现答案"""
-
+    """苏格拉底策略 — 通过提问引导学习者自己发现答案
+    
+    融合启智 skill:
+    - socratic-dialogue: 提问类型库、引导模板
+    - question-design: 布鲁姆层次题目设计
+    - feedback-system: 反馈策略
+    """
+    
     name = "socratic"
     description = "苏格拉底式提问引导"
-
-    async def build_system_prompt(self, node_content, pass_criteria,
-                                  learner, session):
+    
+    async def build_system_prompt(self, node_content, pass_criteria, learner, session):
         learner_desc = self._describe_learner(learner)
         force_hint = ""
         if session.should_force_verdict():
-            force_hint = (
-                "\n\n⚠️ 这是最后一轮了，你必须做出判定：[PASS] 或 [FAIL]。"
-            )
-
+            force_hint = "\n\n⚠️ 这是最后一轮了，你必须做出判定：[PASS] 或 [FAIL]。"
+        
         difficulty_hint = ""
         mod = learner.get_difficulty_modifier() if learner else 1.0
         if mod < 1.0:
-            difficulty_hint = (
-                "\n难度调整：学习者基础较弱，用更简单的场景和更多提示。"
-            )
+            difficulty_hint = "\n难度调整：学习者基础较弱，用更简单的场景和更多提示。"
         elif mod > 1.0:
             difficulty_hint = "\n难度调整：学习者水平较高，用更有挑战的场景。"
-
+        
         hint_instruction = ""
         if learner and learner.should_get_hint():
-            hint_instruction = (
-                "\n注意：学习者当前认知负荷较高，在追问时给出明确的方向性提示。"
-            )
-
+            hint_instruction = "\n注意：学习者当前认知负荷较高，在追问时给出明确的方向性提示。"
+        
         return f"""你是星光学习机的考核官，使用苏格拉底式教学法。
 
 ## 你的角色
@@ -96,6 +90,7 @@ class SocraticStrategy(TeachingStrategy):
             return True, llm_response
         if "[FAIL]" in upper:
             return False, llm_response
+        # 未判定 = 继续对话
         return None, llm_response
 
     def get_opening_message(self, node_title, node_content, learner):
@@ -108,11 +103,7 @@ class SocraticStrategy(TeachingStrategy):
     def _describe_learner(self, learner) -> str:
         if not learner:
             return "新学习者，暂无数据"
-        zpd = {
-            "below": "偏低（内容偏简单）",
-            "zpd": "恰好（最佳学习区）",
-            "above": "偏高（需要更多帮助）",
-        }
+        zpd = {"below": "偏低（内容偏简单）", "zpd": "恰好（最佳学习区）", "above": "偏高（需要更多帮助）"}
         return (
             f"知识水平：{learner.knowledge_level:.0%} | "
             f"自信度：{learner.confidence:.0%} | "
@@ -122,17 +113,21 @@ class SocraticStrategy(TeachingStrategy):
 
 
 class FeynmanStrategy(TeachingStrategy):
-    """费曼技巧策略 — 让学习者"教"来检验理解"""
-
+    """费曼技巧策略 — 让学习者"教"来检验理解
+    
+    融合启智 skill:
+    - teaching-methods: 费曼技巧四步法
+    - explanation-optimizer: 讲解优化
+    """
+    
     name = "feynman"
     description = "费曼技巧 — 用教来学"
-
-    async def build_system_prompt(self, node_content, pass_criteria,
-                                  learner, session):
+    
+    async def build_system_prompt(self, node_content, pass_criteria, learner, session):
         force_hint = ""
         if session and session.should_force_verdict():
             force_hint = "\n\n⚠️ 最后一轮了，判定 [PASS] 或 [FAIL]。"
-
+        
         return f"""你是星光学习机的考核官，使用费曼技巧教学法。
 
 ## 你的角色
@@ -165,19 +160,22 @@ class FeynmanStrategy(TeachingStrategy):
     def get_opening_message(self, node_title, node_content, learner):
         return (
             f"🧠 今天学「{node_title}」！\n\n"
-            f"我来考考你：假设你要把这个概念教给一个 12 岁的孩子，"
-            f"你会怎么解释？"
+            f"我来考考你：假设你要把这个概念教给一个 12 岁的孩子，你会怎么解释？"
         )
 
 
 class ScaffoldStrategy(TeachingStrategy):
-    """脚手架策略 — 分步骤逐步引导"""
-
+    """脚手架策略 — 分步骤逐步引导
+    
+    融合启智 skill:
+    - teaching-methods: 脚手架教学
+    - cognitive-load: 认知负荷控制
+    """
+    
     name = "scaffold"
     description = "脚手架教学 — 分步引导"
-
-    async def build_system_prompt(self, node_content, pass_criteria,
-                                  learner, session):
+    
+    async def build_system_prompt(self, node_content, pass_criteria, learner, session):
         return f"""你是星光学习机的考核官，使用脚手架教学法。
 
 ## 你的角色
@@ -209,46 +207,48 @@ class ScaffoldStrategy(TeachingStrategy):
 
 
 class AdaptiveStrategy(TeachingStrategy):
-    """自适应策略 — 根据学习者画像动态选择策略"""
-
+    """自适应策略 — 根据学习者画像动态选择策略
+    
+    融合启智 skill:
+    - adaptive-learning: 自适应学习路径
+    - difficulty-adjuster: 动态难度调整
+    - learner-model: ZPD 判断
+    """
+    
     name = "adaptive"
     description = "自适应混合策略"
-
+    
+    # 内部策略组合
     _strategies = {
         "socratic": SocraticStrategy(),
         "feynman": FeynmanStrategy(),
         "scaffold": ScaffoldStrategy(),
     }
-
+    
     def _select_strategy(self, learner) -> TeachingStrategy:
         """根据学习者画像选择策略"""
         if not learner:
             return self._strategies["socratic"]
-
+        
         # 新手或低自信 → 脚手架
         if learner.knowledge_level < 0.3 or learner.confidence < 0.3:
             return self._strategies["scaffold"]
-
+        
         # 高水平 → 费曼技巧
         if learner.knowledge_level > 0.7 and learner.bloom_level >= 3:
             return self._strategies["feynman"]
-
+        
         # 默认 → 苏格拉底
         return self._strategies["socratic"]
-
-    async def build_system_prompt(self, node_content, pass_criteria,
-                                  learner, session):
+    
+    async def build_system_prompt(self, node_content, pass_criteria, learner, session):
         strategy = self._select_strategy(learner)
-        return await strategy.build_system_prompt(
-            node_content, pass_criteria, learner, session
-        )
-
+        return await strategy.build_system_prompt(node_content, pass_criteria, learner, session)
+    
     def should_pass(self, llm_response, turn_count, max_turns, learner):
         strategy = self._select_strategy(learner)
-        return strategy.should_pass(
-            llm_response, turn_count, max_turns, learner
-        )
-
+        return strategy.should_pass(llm_response, turn_count, max_turns, learner)
+    
     def get_opening_message(self, node_title, node_content, learner):
         strategy = self._select_strategy(learner)
         return strategy.get_opening_message(node_title, node_content, learner)
