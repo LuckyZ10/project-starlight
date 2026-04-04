@@ -28,8 +28,12 @@ class AssessorV2:
     
     async def _default_llm_call(self, messages: list[dict]) -> str:
         import litellm
+        # For ZhiPu (BigModel) API, use openai-compatible mode
+        model = self.llm_model
+        if not any(model.startswith(p) for p in ("openai/", "zhipu/")):
+            model = f"openai/{model}"
         kwargs = {
-            "model": self.llm_model,
+            "model": model,
             "messages": messages,
             "api_key": self.llm_api_key,
         }
