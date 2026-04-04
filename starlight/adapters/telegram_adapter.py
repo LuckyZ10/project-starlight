@@ -73,6 +73,12 @@ class TelegramAdapter(BaseAdapter):
             CommandHandler("progress", self._handle_progress)
         )
         self._application.add_handler(
+            CommandHandler("stats", self._handle_stats)
+        )
+        self._application.add_handler(
+            CommandHandler("review", self._handle_review)
+        )
+        self._application.add_handler(
             CommandHandler("help", self._handle_help)
         )
 
@@ -147,6 +153,22 @@ class TelegramAdapter(BaseAdapter):
         cartridge_id = self._user_cartridges.get(user_id)
         result = await harness.process(
             user_id=user_id, message="/progress", cartridge_id=cartridge_id
+        )
+        await update.message.reply_text(result.text)
+
+    async def _handle_stats(self, update, context) -> None:
+        """Handle ``/stats`` — show learner statistics."""
+        harness = await self._get_harness()
+        result = await harness.process(
+            user_id=update.effective_user.id, message="/stats"
+        )
+        await update.message.reply_text(result.text)
+
+    async def _handle_review(self, update, context) -> None:
+        """Handle ``/review`` — show due review cards."""
+        harness = await self._get_harness()
+        result = await harness.process(
+            user_id=update.effective_user.id, message="/review"
         )
         await update.message.reply_text(result.text)
 

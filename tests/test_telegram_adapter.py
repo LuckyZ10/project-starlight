@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from starlight.adapters.telegram_adapter import TelegramAdapter
 from starlight.adapters.base import HarnessResult
-from starlight.core.harness import LearningHarness
+from starlight.core.harness_v2 import LearningHarnessV2
 
 
 # ---------------------------------------------------------------------------
@@ -14,7 +14,7 @@ from starlight.core.harness import LearningHarness
 
 @pytest.fixture
 def mock_harness():
-    harness = AsyncMock(spec=LearningHarness)
+    harness = AsyncMock(spec=LearningHarnessV2)
     harness.process.return_value = HarnessResult(text="测试回复", state="idle")
     return harness
 
@@ -160,3 +160,30 @@ async def test_handle_message_without_cartridge(adapter, mock_harness):
     mock_harness.process.assert_not_called()
     reply = update.message.reply_text.call_args[0][0]
     assert "/start" in reply
+
+
+# ---------------------------------------------------------------------------
+# V2 Commands: /stats, /review
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_handle_stats(adapter, mock_harness):
+    update, context = _make_update()
+    await adapter._handle_stats(update, context)
+
+    mock_harness.process.assert_called_once_with(
+        user_id=42, message="/stats"
+    )
+    update.message.reply_text.assert_called_once_with("测试回复")
+
+
+@pytest.mark.asyncio
+async def test_handle_review(adapter, mock_harness):
+    update, context = _make_update()
+    await adapter._handle_review(update, context)
+
+    mock_harness.process.assert_called_once_with(
+        user_id=42, message="/review"
+    )
+    update.message.reply_text.assert_called_once_with("测试回复")

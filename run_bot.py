@@ -14,9 +14,10 @@ import sys
 from starlight.config import settings
 from starlight.adapters.telegram_adapter import TelegramAdapter
 from starlight.core.cartridge import CartridgeLoader
-from starlight.core.assessor import Assessor
+from starlight.core.assessor_v2 import AssessorV2
 from starlight.core.contributor import TributeEngine
-from starlight.core.harness import LearningHarness
+from starlight.core.harness_v2 import LearningHarnessV2
+from starlight.core.strategies import get_strategy
 from starlight.main import MockProgressManager
 
 logging.basicConfig(
@@ -26,17 +27,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def create_harness() -> LearningHarness:
-    """Build a fully-wired LearningHarness."""
+async def create_harness() -> LearningHarnessV2:
+    """Build a fully-wired LearningHarnessV2 with adaptive strategy."""
     loader = CartridgeLoader(settings.cartridges_dir)
-    assessor = Assessor(
+    strategy = get_strategy("adaptive")
+    assessor = AssessorV2(
         llm_model=settings.llm_model,
         llm_api_key=settings.llm_api_key,
-        max_turns=settings.assessment_max_turns,
+        llm_base_url=getattr(settings, 'llm_base_url', ''),
+        strategy=strategy,
     )
     progress_mgr = MockProgressManager()
     tribute = TributeEngine()
-    return LearningHarness(loader, assessor, progress_mgr, tribute)
+    return LearningHarnessV2(
+        cartridge_loader=loader,
+        assessor=assessor,
+        progress_mgr=progress_mgr,
+        tribute_engine=tribute,
+        strategy_name="adaptive",
+    )
 
 
 async def main() -> None:
