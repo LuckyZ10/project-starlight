@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Static HTML directory
-WEB_DIR = Path(__file__).parent.parent / "web"
+WEB_DIR = Path(__file__).resolve().parent.parent.parent / "web"
 
 # In-memory session-to-user mapping (Web → harness user_id)
 _web_users: dict[str, int] = {}
@@ -70,11 +70,22 @@ async def websocket_endpoint(websocket: WebSocket):
             text = msg.get("text", "")
 
             if action == "browse":
-                result = await harness.process(user_id=user_id, message="/browse")
+                # Send structured cartridge list for interactive cards
+                cartridges = []
+                for cart_id in harness.cartridges.list_cartridges():
+                    try:
+                        cart = harness.cartridges.load(cart_id)
+                        cartridges.append({
+                            "id": cart_id,
+                            "title": cart.get("title", cart_id),
+                            "nodes": len(cart.get("nodes", [])),
+                        })
+                    except Exception:
+                        cartridges.append({"id": cart_id, "title": cart_id, "nodes": 0})
                 await _send(websocket, {
                     "type": "browse",
-                    "text": result.text,
-                    "state": result.state,
+                    "cartridges": cartridges,
+                    "state": "idle",
                 })
 
             elif action == "start":

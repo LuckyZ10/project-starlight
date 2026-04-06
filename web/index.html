@@ -204,7 +204,20 @@ function handleServerMessage(msg) {
       // Initial welcome, already shown
       break;
     case 'browse':
-      addAssistantMsg(msg.text, { browse: true });
+      if (msg.cartridges && msg.cartridges.length > 0) {
+        let cartHtml = '<div style="margin-bottom:8px">📚 选择一个卡带开始学习：</div>';
+        cartHtml += '<div class="cart-grid">';
+        msg.cartridges.forEach(c => {
+          cartHtml += `<div class="cart-card" onclick="startCartridge('${escAttr(c.id)}')">
+            <h4>${escHtml(c.title)}</h4>
+            <p>${c.nodes} 个知识点</p>
+          </div>`;
+        });
+        cartHtml += '</div>';
+        addAssistantMsg(cartHtml, { raw: true });
+      } else {
+        addAssistantMsg('暂无可用卡带');
+      }
       break;
     case 'progress':
     case 'stats':
@@ -272,6 +285,11 @@ function sendAction(action, data = {}) {
 function selectOption(label, text) {
   addUserMsg(`${label}. ${text}`);
   sendAction('message', { text: label });
+}
+
+function startCartridge(cartId) {
+  addUserMsg(`开始学习：${cartId}`);
+  sendAction('start', { cartridge_id: cartId });
 }
 
 // Multi-select
