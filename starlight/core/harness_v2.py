@@ -1,6 +1,9 @@
 # starlight/core/harness_v2.py
 """V2 Harness — 完整教学循环，融合启智教学策略"""
 from __future__ import annotations
+
+import logging
+
 from starlight.adapters.base import HarnessResult
 from starlight.core.session import Session
 from starlight.core.learner import LearnerProfile
@@ -9,10 +12,17 @@ from starlight.core.assessor_v2 import AssessorV2
 from starlight.core.contributor import TributeEngine
 from starlight.core.cartridge import CartridgeLoader
 from starlight.core.spaced_rep import ReviewCard, calculate_next_review, get_due_cards
+from starlight import database as db
+
+logger = logging.getLogger(__name__)
 
 
 class LearningHarnessV2:
-    """Starlight V2 学习引擎 — 融合启智 24 个教学 skill"""
+    """Starlight V2 学习引擎 — 融合启智 24 个教学 skill
+    
+    内存 dicts 作为写穿透缓存：每次写入同时更新内存 + SQLite。
+    读取先查内存，miss 再查 DB。
+    """
     
     def __init__(self, cartridge_loader: CartridgeLoader,
                  assessor: AssessorV2, progress_mgr, tribute_engine: TributeEngine,
@@ -23,18 +33,76 @@ class LearningHarnessV2:
         self.tribute = tribute_engine
         self.strategy_name = strategy_name
         
-        # 会话和画像存储（生产环境用 DB，现在用内存）
+        # 写穿透缓存（内存 → DB）
         self._sessions: dict[tuple[int, str], Session] = {}
         self._learners: dict[int, LearnerProfile] = {}
         self._review_cards: dict[int, list[ReviewCard]] = {}
     
-    def get_session(self, user_id: int, cartridge_id: str) -> Session | None:
-        return self._sessions.get((user_id, cartridge_id))
+    async def get_session(self, user_id: int, cartridge_id: str) -> Session | None:
+        key = (user_id, cartridge_id)
+        if key in self._sessions:
+            return self._sessions[key]
+        # Cache miss → try DB
+        try:
+            sess = await db.load_session(user_id, cartridge_id)
+            if sess is not None:
+                self._sessions[key] = sess
+            return sess
+        except Exception as e:
+            logger.warning("Failed to load session from DB: %s", e)
+            return None
     
-    def get_learner(self, user_id: int) -> LearnerProfile:
-        if user_id not in self._learners:
-            self._learners[user_id] = LearnerProfile(user_id=user_id)
-        return self._learners[user_id]
+    async def get_learner(self, user_id: int) -> LearnerProfile:
+        if user_id in self._learners:
+            return self._learners[user_id]
+        # Cache miss → try DB
+        try:
+            learner = await db.load_learner(user_id)
+            if learner is not None:
+                self._learners[user_id] = learner
+                return learner
+        except Exception as e:
+            logger.warning("Failed to load learner from DB: %s", e)
+        # Not found anywhere → create new
+        learner = LearnerProfile(user_id=user_id)
+        self._learners[user_id] = learner
+        return learner
+    
+    async def _persist_session(self, session: Session) -> None:
+        """Write session through to DB."""
+        self._sessions[(session.user_id, session.cartridge_id)] = session
+        try:
+            await db.save_session(session)
+        except Exception as e:
+            logger.warning("Failed to persist session: %s", e)
+    
+    async def _persist_learner(self, learner: LearnerProfile) -> None:
+        """Write learner profile through to DB."""
+        self._learners[learner.user_id] = learner
+        try:
+            await db.save_learner(learner)
+        except Exception as e:
+            logger.warning("Failed to persist learner: %s", e)
+    
+    async def _persist_review_cards(self, user_id: int) -> None:
+        """Write review cards through to DB."""
+        cards = self._review_cards.get(user_id, [])
+        try:
+            await db.save_review_cards(user_id, cards)
+        except Exception as e:
+            logger.warning("Failed to persist review cards: %s", e)
+    
+    async def _load_review_cards(self, user_id: int) -> list[ReviewCard]:
+        """Load review cards (memory first, then DB)."""
+        if user_id in self._review_cards:
+            return self._review_cards[user_id]
+        try:
+            cards = await db.load_review_cards(user_id)
+            self._review_cards[user_id] = cards
+            return cards
+        except Exception as e:
+            logger.warning("Failed to load review cards from DB: %s", e)
+            return []
     
     def _get_strategy(self) -> TeachingStrategy:
         return get_strategy(self.strategy_name)
@@ -42,7 +110,7 @@ class LearningHarnessV2:
     async def process(self, user_id: int, message: str, 
                       cartridge_id: str | None = None) -> HarnessResult:
         """核心方法：处理用户消息"""
-        learner = self.get_learner(user_id)
+        learner = await self.get_learner(user_id)
         strategy = self._get_strategy()
         self.assessor.strategy = strategy
         
@@ -64,7 +132,7 @@ class LearningHarnessV2:
         if not cartridge_id:
             return HarnessResult(text="请先 /start 选择一个卡带", state="idle")
         
-        session = self.get_session(user_id, cartridge_id)
+        session = await self.get_session(user_id, cartridge_id)
         if session is None:
             return HarnessResult(text="请先 /start 选择一个卡带", state="idle")
         
@@ -93,6 +161,10 @@ class LearningHarnessV2:
             turn_count=session.turn_count, error_type=result.error_type
         )
         
+        # 持久化 session + learner（写穿透）
+        await self._persist_session(session)
+        await self._persist_learner(learner)
+        
         # 处理结果
         if result.verdict == "PASS":
             return await self._handle_pass(user_id, cartridge_id, cart, node, result, session, learner)
@@ -113,7 +185,6 @@ class LearningHarnessV2:
         # 创建会话
         session = Session(user_id=user_id, cartridge_id=cartridge_id, current_node=entry["id"])
         session.max_turns = learner.get_max_turns()
-        self._sessions[(user_id, cartridge_id)] = session
         
         # 更新进度
         await self.progress.start_cartridge(user_id, cartridge_id, entry["id"])
@@ -124,6 +195,10 @@ class LearningHarnessV2:
         # 让 LLM 生成第一个小问题（不甩教材）
         first_question = await self._generate_first_question(content, entry["pass_criteria"], learner, session)
         session.add_exchange("assistant", first_question)
+        
+        # 持久化 session + learner（写穿透）
+        await self._persist_session(session)
+        await self._persist_learner(learner)
         
         opening = strategy.get_opening_message(entry["title"], content, learner)
         
@@ -156,10 +231,13 @@ class LearningHarnessV2:
         
         # 创建复习卡片
         self._add_review_card(user_id, node["id"], cartridge_id, node.get("title", ""), result.quality)
+        await self._persist_review_cards(user_id)
         
         if not next_nodes:
             # 通关！
             await self.progress.complete_cartridge(user_id, cartridge_id)
+            await db.delete_session(user_id, cartridge_id)
+            self._sessions.pop((user_id, cartridge_id), None)
             tribute_text = self.tribute.build_completion_tribute(
                 cartridge_id, cart["title"], cart.get("contributors", [])
             )
@@ -183,6 +261,10 @@ class LearningHarnessV2:
             
             first_q = await self._generate_first_question(next_content, next_node["pass_criteria"], learner, session)
             session.add_exchange("assistant", first_q)
+            
+            # 持久化 session + learner
+            await self._persist_session(session)
+            await self._persist_learner(learner)
             
             return HarnessResult(
                 text=f"✅ {result.feedback}\n\n---\n\n{opening}\n\n{first_q}",
@@ -208,7 +290,7 @@ class LearningHarnessV2:
         self._review_cards[user_id].append(card)
     
     async def _handle_review_cards(self, user_id) -> HarnessResult:
-        cards = self._review_cards.get(user_id, [])
+        cards = await self._load_review_cards(user_id)
         due = get_due_cards(cards)
         if not due:
             return HarnessResult(text="📭 暂无需要复习的内容，继续保持学习！", state="idle")

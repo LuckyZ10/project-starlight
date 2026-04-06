@@ -1,6 +1,6 @@
 # tests/test_harness_v2.py
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from starlight.core.harness_v2 import LearningHarnessV2
 from starlight.core.assessor_v2 import AssessorV2
@@ -62,6 +62,20 @@ def harness(mock_node_n01, mock_node_n02):
     )
 
 
+@pytest.fixture(autouse=True)
+def _mock_db():
+    """Mock all DB calls so unit tests don't hit SQLite."""
+    with patch("starlight.core.harness_v2.db") as mock_db:
+        mock_db.load_session = AsyncMock(return_value=None)
+        mock_db.save_session = AsyncMock()
+        mock_db.load_learner = AsyncMock(return_value=None)
+        mock_db.save_learner = AsyncMock()
+        mock_db.save_review_cards = AsyncMock()
+        mock_db.load_review_cards = AsyncMock(return_value=[])
+        mock_db.delete_session = AsyncMock()
+        yield mock_db
+
+
 @pytest.mark.asyncio
 async def test_start_creates_session(harness):
     harness.assessor._call_llm.return_value = "来考考你：什么是变量？"
@@ -69,7 +83,7 @@ async def test_start_creates_session(harness):
         user_id=1, message="/start", cartridge_id="python-basics"
     )
     assert result.state == "learning"
-    session = harness.get_session(1, "python-basics")
+    session = await harness.get_session(1, "python-basics")
     assert session is not None
     assert session.current_node == "N01"
 
@@ -92,7 +106,7 @@ async def test_full_flow(harness, mock_node_n01):
     assert result.verdict == "PASS"
 
     # Check learner profile updated
-    learner = harness.get_learner(1)
+    learner = await harness.get_learner(1)
     assert learner.total_xp > 0
     assert learner.nodes_completed == 1
 
@@ -112,7 +126,7 @@ async def test_continue_flow(harness, mock_node_n01):
     assert result.verdict == "CONTINUE"
 
     # Session has conversation history
-    session = harness.get_session(1, "python-basics")
+    session = await harness.get_session(1, "python-basics")
     assert len(session.conversation) >= 3
 
 
@@ -195,6 +209,6 @@ async def test_learner_profile_persistence(harness, mock_node_n01):
         user_id=1, message="answer", cartridge_id="python-basics"
     )
 
-    learner = harness.get_learner(1)
+    learner = await harness.get_learner(1)
     assert learner.nodes_completed == 1
     assert len(learner.error_patterns) == 0

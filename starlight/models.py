@@ -15,6 +15,9 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     progress = relationship("UserProgress", back_populates="user")
     assessments = relationship("Assessment", back_populates="user")
+    learning_sessions = relationship("LearningSession", back_populates="user", cascade="all, delete-orphan")
+    learner_profile = relationship("LearnerProfileModel", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    review_cards = relationship("ReviewCardModel", back_populates="user", cascade="all, delete-orphan")
 
 class Cartridge(Base):
     __tablename__ = "cartridges"
@@ -78,3 +81,63 @@ class CartridgeContributor(Base):
     cartridge_id = Column(String, ForeignKey("cartridges.id"), primary_key=True)
     contributor_id = Column(Integer, ForeignKey("contributors.id"), primary_key=True)
     role = Column(String, default="author")
+
+
+class LearningSession(Base):
+    """Persisted learning session — survives bot restarts."""
+    __tablename__ = "learning_sessions"
+    __table_args__ = (
+        {"sqlite_autoincrement": True},
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    cartridge_id = Column(String, ForeignKey("cartridges.id"), nullable=False)
+    current_node = Column(String, nullable=False)
+    turn_count = Column(Integer, default=0)
+    max_turns = Column(Integer, default=5)
+    conversation_json = Column(JSON, default=list)
+    node_scores_json = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user = relationship("User", back_populates="learning_sessions")
+
+    __table_args__ = (
+        {"sqlite_autoincrement": True},
+    )
+
+
+class LearnerProfileModel(Base):
+    """Persisted learner profile — survives bot restarts."""
+    __tablename__ = "learner_profiles"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    knowledge_level = Column(Float, default=0.0)
+    learning_speed = Column(Float, default=1.0)
+    confidence = Column(Float, default=0.5)
+    engagement = Column(Float, default=0.5)
+    cognitive_load = Column(Float, default=0.3)
+    zpd_zone = Column(String, default="zpd")
+    bloom_level = Column(Integer, default=1)
+    streak_days = Column(Integer, default=0)
+    total_xp = Column(Integer, default=0)
+    nodes_completed = Column(Integer, default=0)
+    error_patterns_json = Column(JSON, default=list)
+    history_json = Column(JSON, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user = relationship("User", back_populates="learner_profile")
+
+
+class ReviewCardModel(Base):
+    """Persisted SM-2+ review cards — survives bot restarts."""
+    __tablename__ = "review_cards"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    node_id = Column(String, nullable=False)
+    cartridge_id = Column(String, nullable=False)
+    interval = Column(Integer, default=1)
+    ease_factor = Column(Float, default=2.5)
+    repetition = Column(Integer, default=0)
+    last_review = Column(DateTime, nullable=True)
+    next_review = Column(DateTime, nullable=True)
+    title = Column(String, default="")
+    user = relationship("User", back_populates="review_cards")
