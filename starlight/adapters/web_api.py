@@ -1,6 +1,7 @@
 """Web API adapter — FastAPI + WebSocket for Claude.ai-style web frontend."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -64,7 +65,13 @@ async def websocket_endpoint(websocket: WebSocket):
         })
 
         while True:
-            data = await websocket.receive_text()
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=120)
+            except asyncio.TimeoutError:
+                # Send heartbeat to keep connection alive
+                await _send(websocket, {"type": "heartbeat"})
+                continue
+
             msg = json.loads(data)
             action = msg.get("action", "message")
             text = msg.get("text", "")
@@ -91,10 +98,22 @@ async def websocket_endpoint(websocket: WebSocket):
             elif action == "start":
                 cart_id = msg.get("cartridge_id", "")
                 cartridge_id = cart_id
-                result = await harness.process(
-                    user_id=user_id, message="/start", cartridge_id=cart_id,
-                )
-                await _send_result(websocket, result)
+                await _send(websocket, {"type": "typing"})
+                try:
+                    result = await asyncio.wait_for(
+                        harness.process(user_id=user_id, message="/start", cartridge_id=cart_id),
+                        timeout=30,
+                    )
+                    await _send_result(websocket, result)
+                except asyncio.TimeoutError:
+                    await _send(websocket, {
+                        "type": "message",
+                        "text": "⏱️ AI 老师思考太久了，请再试一次",
+                        "options": [],
+                        "is_multi": False,
+                        "verdict": None,
+                        "state": "idle",
+                    })
 
             elif action == "progress":
                 result = await harness.process(
@@ -129,10 +148,21 @@ async def websocket_endpoint(websocket: WebSocket):
                     continue
                 # Show typing indicator
                 await _send(websocket, {"type": "typing"})
-                result = await harness.process(
-                    user_id=user_id, message=text, cartridge_id=cartridge_id,
-                )
-                await _send_result(websocket, result)
+                try:
+                    result = await asyncio.wait_for(
+                        harness.process(user_id=user_id, message=text, cartridge_id=cartridge_id),
+                        timeout=30,
+                    )
+                    await _send_result(websocket, result)
+                except asyncio.TimeoutError:
+                    await _send(websocket, {
+                        "type": "message",
+                        "text": "⏱️ AI 老师思考太久了，请再试一次",
+                        "options": [],
+                        "is_multi": False,
+                        "verdict": None,
+                        "state": "learning",
+                    })
 
     except WebSocketDisconnect:
         logger.info("Web client disconnected: %s", session_id)

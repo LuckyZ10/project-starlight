@@ -196,14 +196,18 @@ function connect() {
 }
 
 function handleServerMessage(msg) {
-  hideWelcome();
   removeTyping();
 
   switch(msg.type) {
     case 'welcome':
-      // Initial welcome, already shown
+      statusText.textContent = '在线';
+      statusText.style.color = '#10b981';
+      break;
+    case 'heartbeat':
+      // Keepalive, ignore
       break;
     case 'browse':
+      hideWelcome();
       if (msg.cartridges && msg.cartridges.length > 0) {
         let cartHtml = '<div style="margin-bottom:8px">📚 选择一个卡带开始学习：</div>';
         cartHtml += '<div class="cart-grid">';
@@ -269,7 +273,11 @@ function handleServerMessage(msg) {
 
 function sendMessage() {
   const text = input.value.trim();
-  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!text) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    addSystemMsg('⚠️ 连接断开了，正在重连...');
+    return;
+  }
   addUserMsg(text);
   ws.send(JSON.stringify({ action: 'message', text }));
   input.value = '';
@@ -277,7 +285,10 @@ function sendMessage() {
 }
 
 function sendAction(action, data = {}) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    addSystemMsg('⚠️ 连接断开了，正在重连...');
+    return;
+  }
   const msg = { action, ...data };
   ws.send(JSON.stringify(msg));
 }
