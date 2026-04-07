@@ -252,7 +252,13 @@ class KnowledgeExtractor:
                 logger.error("Phase 1: JSON parse failed after repair")
                 return []
 
-        raw_kps = data.get("knowledge_points", [])
+        # 容错：LLM 可能返回 list 或 dict
+        if isinstance(data, list):
+            raw_kps = data
+        elif isinstance(data, dict):
+            raw_kps = data.get("knowledge_points", [])
+        else:
+            raw_kps = []
         result: list[KnowledgePoint] = []
 
         for idx, kp_data in enumerate(raw_kps):

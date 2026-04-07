@@ -1,0 +1,138 @@
+{
+  "id": "transformer-complete",
+  "title": "Transformer算法完全指南：从初中数学到工程实践",
+  "version": "1.0.0",
+  "language": "zh-CN",
+  "contributors": [
+    {
+      "name": "Cartridge Factory",
+      "role": "auto-generated",
+      "quote": "由教材制造机自动生成"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "N01",
+      "title": "向量基础",
+      "file": "nodes/N01-向量基础.md",
+      "prerequisites": [],
+      "difficulty": 1,
+      "pass_criteria": "理解向量的维度、矩阵乘法、点积运算及其在表达和相似度衡量中的作用"
+    },
+    {
+      "id": "N02",
+      "title": "Softmax与交叉熵",
+      "file": "nodes/N02-Softmax与交叉熵.md",
+      "prerequisites": [
+        "N01"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能够解释Softmax函数和交叉熵损失在概率分布和分类任务中的作用"
+    },
+    {
+      "id": "N03",
+      "title": "神经网络构建块",
+      "file": "nodes/N03-神经网络构建块.md",
+      "prerequisites": [
+        "N01"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "了解神经网络的基本构建块，包括线性变换、梯度下降、神经元和GELU激活函数"
+    },
+    {
+      "id": "N04",
+      "title": "Dropout技术",
+      "file": "nodes/N04-Dropout技术.md",
+      "prerequisites": [
+        "N03"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "掌握Dropout的概念、应用位置、作用以及在训练和推理中的使用方法"
+    },
+    {
+      "id": "N05",
+      "title": "层归一化",
+      "file": "nodes/N05-层归一化.md",
+      "prerequisites": [
+        "N03"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "了解层归一化的位置选择、RMSNorm的公式及其在模型中的应用"
+    },
+    {
+      "id": "N06",
+      "title": "PyTorch基础",
+      "file": "nodes/N06-PyTorch基础.md",
+      "prerequisites": [
+        "N03"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "熟悉PyTorch的核心概念，如Tensor、autograd和nn.Module"
+    },
+    {
+      "id": "N07",
+      "title": "量化与优化",
+      "file": "nodes/N07-量化与优化.md",
+      "prerequisites": [
+        "N06"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "了解QLoRA的量化方法和65B模型在资源受限环境下的表现"
+    },
+    {
+      "id": "N08",
+      "title": "HuggingFace Hub",
+      "file": "nodes/N08-HuggingFace-Hub.md",
+      "prerequisites": [
+        "N06"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "熟悉HuggingFace Hub的功能，包括模型托管、版本控制和演示应用"
+    },
+    {
+      "id": "N09",
+      "title": "序列建模与Transformer",
+      "file": "nodes/N09-序列建模与Transformer.md",
+      "prerequisites": [
+        "N03"
+      ],
+      "difficulty": 4,
+      "pass_criteria": "理解序列建模任务、Transformer的复杂度限制、稀疏和线性注意力机制以及硬件感知优化"
+    }
+  ],
+  "dag": {
+    "entry": "N01",
+    "edges": {
+      "N01": [
+        "N02",
+        "N03",
+        "N06"
+      ],
+      "N02": [
+        "N04"
+      ],
+      "N03": [
+        "N04",
+        "N05",
+        "N06",
+        "N07",
+        "N08",
+        "N09"
+      ],
+      "N05": [
+        "N09"
+      ],
+      "N06": [
+        "N07",
+        "N08",
+        "N09"
+      ],
+      "N07": [
+        "N09"
+      ],
+      "N08": [
+        "N09"
+      ]
+    }
+  }
+}
