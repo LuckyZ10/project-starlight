@@ -25,18 +25,38 @@ def make_fake_llm(responses: list[str]):
     return fake_llm
 
 
+def make_fake_llm_no_second_pass(responses: list[str]):
+    """创建假 LLM，禁用二次查漏（减少需要的 mock 数量）"""
+    call_count = 0
+
+    async def fake_llm(messages):
+        nonlocal call_count
+        idx = min(call_count, len(responses) - 1)
+        call_count += 1
+        return responses[idx]
+
+    return fake_llm
+
+
 EXTRACTION_RESPONSE = """```json
 {
   "title": "测试课程",
   "total_kps": 6,
   "knowledge_points": [
-    {"id": "KP-001", "type": "concept", "statement": "变量的定义", "source_section": "1.1", "source_text": "变量是存储数据的容器", "keywords": ["变量", "赋值"]},
-    {"id": "KP-002", "type": "concept", "statement": "赋值运算符", "source_section": "1.1", "source_text": "= 是赋值不是等于", "keywords": ["赋值", "运算符"]},
-    {"id": "KP-003", "type": "fact", "statement": "Python 动态类型", "source_section": "1.2", "source_text": "Python不需要声明类型", "keywords": ["类型", "动态"]},
-    {"id": "KP-004", "type": "concept", "statement": "整数类型", "source_section": "1.2", "source_text": "整数是 int 类型", "keywords": ["int", "整数"]},
-    {"id": "KP-005", "type": "concept", "statement": "字符串类型", "source_section": "1.2", "source_text": "字符串是 str 类型", "keywords": ["str", "字符串"]},
-    {"id": "KP-006", "type": "procedure", "statement": "类型转换", "source_section": "1.3", "source_text": "用 int() 做类型转换", "keywords": ["类型转换", "int"]}
+    {"id": "KP-001", "type": "concept", "statement": "变量的定义", "source_section": "1.1", "source_text": "变量是存储数据的容器", "keywords": ["变量", "赋值"], "importance": "core"},
+    {"id": "KP-002", "type": "concept", "statement": "赋值运算符", "source_section": "1.1", "source_text": "= 是赋值不是等于", "keywords": ["赋值", "运算符"], "importance": "core"},
+    {"id": "KP-003", "type": "fact", "statement": "Python 动态类型", "source_section": "1.2", "source_text": "Python不需要声明类型", "keywords": ["类型", "动态"], "importance": "important"},
+    {"id": "KP-004", "type": "concept", "statement": "整数类型", "source_section": "1.2", "source_text": "整数是 int 类型", "keywords": ["int", "整数"], "importance": "important"},
+    {"id": "KP-005", "type": "concept", "statement": "字符串类型", "source_section": "1.2", "source_text": "字符串是 str 类型", "keywords": ["str", "字符串"], "importance": "important"},
+    {"id": "KP-006", "type": "procedure", "statement": "类型转换", "source_section": "1.3", "source_text": "用 int() 做类型转换", "keywords": ["类型转换", "int"], "importance": "important"}
   ]
+}
+```"""
+
+MISS_RESPONSE = """```json
+{
+  "missed_count": 0,
+  "missed_points": []
 }
 ```"""
 
@@ -121,12 +141,12 @@ AUDIT_RESPONSE = """```json
     "coverage_percent": 100.0
   },
   "details": [
-    {"kp_id": "KP-001", "status": "FULL", "mapped_node": "N01"},
-    {"kp_id": "KP-002", "status": "FULL", "mapped_node": "N01"},
-    {"kp_id": "KP-003", "status": "FULL", "mapped_node": "N02"},
-    {"kp_id": "KP-004", "status": "FULL", "mapped_node": "N02"},
-    {"kp_id": "KP-005", "status": "FULL", "mapped_node": "N02"},
-    {"kp_id": "KP-006", "status": "FULL", "mapped_node": "N03"}
+    {"kp_id": "KP-001", "status": "FULL", "mapped_node": "N01", "evidence": "变量是存储数据的容器", "issue": ""},
+    {"kp_id": "KP-002", "status": "FULL", "mapped_node": "N01", "evidence": "= 是赋值运算符", "issue": ""},
+    {"kp_id": "KP-003", "status": "FULL", "mapped_node": "N02", "evidence": "动态类型", "issue": ""},
+    {"kp_id": "KP-004", "status": "FULL", "mapped_node": "N02", "evidence": "int 整数", "issue": ""},
+    {"kp_id": "KP-005", "status": "FULL", "mapped_node": "N02", "evidence": "str 字符串", "issue": ""},
+    {"kp_id": "KP-006", "status": "FULL", "mapped_node": "N03", "evidence": "int() 类型转换", "issue": ""}
   ]
 }
 ```"""
@@ -152,19 +172,20 @@ VALIDATE_RESPONSE = """```json
 class TestKnowledgeExtractor:
     @pytest.mark.asyncio
     async def test_extract_single_chunk(self):
-        fake_llm = make_fake_llm([EXTRACTION_RESPONSE])
-        extractor = KnowledgeExtractor(fake_llm)
+        fake_llm = make_fake_llm([EXTRACTION_RESPONSE, MISS_RESPONSE])
+        extractor = KnowledgeExtractor(fake_llm, enable_second_pass=True)
 
         result = await extractor.extract("测试课程", "一些测试内容")
 
         assert isinstance(result, ExtractionResult)
         assert result.total == 6
-        assert result.knowledge_points[0].id == "KP-001"
+        assert result.knowledge_points[0].id.startswith("KP-")
         assert result.knowledge_points[0].type == "concept"
+        assert result.knowledge_points[0].importance == "core"
 
     @pytest.mark.asyncio
     async def test_extract_preserves_types(self):
-        fake_llm = make_fake_llm([EXTRACTION_RESPONSE])
+        fake_llm = make_fake_llm([EXTRACTION_RESPONSE, MISS_RESPONSE])
         extractor = KnowledgeExtractor(fake_llm)
 
         result = await extractor.extract("测试", "内容")
@@ -173,6 +194,45 @@ class TestKnowledgeExtractor:
         assert "concept" in types
         assert "fact" in types
         assert "procedure" in types
+
+    @pytest.mark.asyncio
+    async def test_deduplication(self):
+        """测试重复知识点去重"""
+        dedup_response = """```json
+        {
+          "title": "测试",
+          "total_kps": 3,
+          "knowledge_points": [
+            {"id": "KP-001", "type": "concept", "statement": "变量是存储数据的容器", "source_section": "1.1", "source_text": "内容", "keywords": ["变量"], "importance": "core"},
+            {"id": "KP-002", "type": "concept", "statement": "变量是存储数据的容器", "source_section": "1.1", "source_text": "内容", "keywords": ["变量"], "importance": "core"},
+            {"id": "KP-003", "type": "fact", "statement": "Python 是解释型语言", "source_section": "1.2", "source_text": "内容", "keywords": ["python"], "importance": "important"}
+          ]
+        }
+        ```"""
+        fake_llm = make_fake_llm([dedup_response, MISS_RESPONSE])
+        extractor = KnowledgeExtractor(fake_llm)
+
+        result = await extractor.extract("测试", "内容")
+
+        assert result.total == 2  # KP-001 和 KP-002 是重复的
+
+    @pytest.mark.asyncio
+    async def test_second_pass_finds_missed(self):
+        """测试二次查漏能发现遗漏的知识点"""
+        miss_found_response = """```json
+        {
+          "missed_count": 1,
+          "missed_points": [
+            {"id": "KP-MISS-001", "type": "fact", "statement": "Python 3 默认编码是 UTF-8", "source_section": "1.4", "source_text": "默认编码是 UTF-8", "keywords": ["编码", "UTF-8"], "importance": "detail", "why_missed": "在段落末尾"}
+          ]
+        }
+        ```"""
+        fake_llm = make_fake_llm([EXTRACTION_RESPONSE, miss_found_response])
+        extractor = KnowledgeExtractor(fake_llm, enable_second_pass=True)
+
+        result = await extractor.extract("测试", "内容")
+
+        assert result.total == 7  # 原始 6 + 补漏 1
 
 
 class TestNodeBuilder:
@@ -189,12 +249,12 @@ class TestNodeBuilder:
         extraction = ExtractionResult(
             title="测试",
             knowledge_points=[
-                KnowledgePoint("KP-001", "concept", "变量的定义", "1.1", "变量是容器", ["变量"]),
-                KnowledgePoint("KP-002", "concept", "赋值", "1.1", "=是赋值", ["赋值"]),
-                KnowledgePoint("KP-003", "fact", "动态类型", "1.2", "不用声明类型", ["类型"]),
-                KnowledgePoint("KP-004", "concept", "整数", "1.2", "整数是int", ["int"]),
-                KnowledgePoint("KP-005", "concept", "字符串", "1.2", "字符串是str", ["str"]),
-                KnowledgePoint("KP-006", "procedure", "类型转换", "1.3", "用int()", ["转换"]),
+                KnowledgePoint("KP-001", "concept", "变量的定义", "1.1", "变量是容器", ["变量"], "core"),
+                KnowledgePoint("KP-002", "concept", "赋值", "1.1", "=是赋值", ["赋值"], "core"),
+                KnowledgePoint("KP-003", "fact", "动态类型", "1.2", "不用声明类型", ["类型"], "important"),
+                KnowledgePoint("KP-004", "concept", "整数", "1.2", "整数是int", ["int"], "important"),
+                KnowledgePoint("KP-005", "concept", "字符串", "1.2", "字符串是str", ["str"], "important"),
+                KnowledgePoint("KP-006", "procedure", "类型转换", "1.3", "用int()", ["转换"], "important"),
             ],
         )
 
@@ -220,7 +280,7 @@ class TestNodeBuilder:
         extraction = ExtractionResult(
             title="测试",
             knowledge_points=[
-                KnowledgePoint("KP-001", "concept", "变量", "1.1", "内容", []),
+                KnowledgePoint("KP-001", "concept", "变量", "1.1", "内容", [], "core"),
             ],
         )
         result = await builder.build(extraction)
@@ -241,7 +301,7 @@ class TestCoverageAuditor:
         extraction = ExtractionResult(
             title="测试",
             knowledge_points=[
-                KnowledgePoint(f"KP-{i:03d}", "concept", f"知识点{i}", "1.1", "内容", [])
+                KnowledgePoint(f"KP-{i:03d}", "concept", f"知识点{i}", "1.1", "内容", [], "important")
                 for i in range(1, 7)
             ],
         )
@@ -267,9 +327,9 @@ class TestCoverageAuditor:
 {
   "coverage_report": {"total": 3, "full": 2, "partial": 0, "missing": 1, "distorted": 0, "coverage_percent": 66.7},
   "details": [
-    {"kp_id": "KP-001", "status": "FULL", "mapped_node": "N01"},
-    {"kp_id": "KP-002", "status": "FULL", "mapped_node": "N01"},
-    {"kp_id": "KP-003", "status": "MISSING", "mapped_node": "", "issue": "未在教学内容中出现"}
+    {"kp_id": "KP-001", "status": "FULL", "mapped_node": "N01", "evidence": "找到", "issue": ""},
+    {"kp_id": "KP-002", "status": "FULL", "mapped_node": "N01", "evidence": "找到", "issue": ""},
+    {"kp_id": "KP-003", "status": "MISSING", "mapped_node": "", "evidence": "", "issue": "未在教学内容中出现"}
   ]
 }
 ```"""
@@ -279,9 +339,9 @@ class TestCoverageAuditor:
         extraction = ExtractionResult(
             title="测试",
             knowledge_points=[
-                KnowledgePoint("KP-001", "concept", "A", "1", "a", []),
-                KnowledgePoint("KP-002", "concept", "B", "1", "b", []),
-                KnowledgePoint("KP-003", "concept", "C", "1", "c", []),
+                KnowledgePoint("KP-001", "concept", "A", "1", "a", [], "important"),
+                KnowledgePoint("KP-002", "concept", "B", "1", "b", [], "important"),
+                KnowledgePoint("KP-003", "concept", "C", "1", "c", [], "important"),
             ],
         )
         build = BuildResult(
@@ -305,7 +365,7 @@ class TestCrossValidator:
 
         extraction = ExtractionResult(
             title="测试",
-            knowledge_points=[KnowledgePoint("KP-001", "concept", "变量", "1", "内容", ["变量"])],
+            knowledge_points=[KnowledgePoint("KP-001", "concept", "变量", "1", "内容", ["变量"], "core")],
         )
         build = BuildResult(
             nodes=[NodeSpec("N01", "变量", ["KP-001"], [], 1, "能解释变量", "摘要", "内容" * 10)],
@@ -326,8 +386,9 @@ class TestCartridgeFactoryIntegration:
     async def test_full_pipeline(self, tmp_path):
         """端到端测试：原始文本 → .star 卡带"""
         responses = [
-            EXTRACTION_RESPONSE,               # Phase 1
-            BUILD_RESPONSE,                     # Phase 2: 分组
+            EXTRACTION_RESPONSE,               # Phase 1 round 1
+            MISS_RESPONSE,                     # Phase 1 round 2 (查漏)
+            BUILD_RESPONSE,                    # Phase 2: 分组
             NODE_CONTENT_RESPONSE_N01,          # Phase 2.5: N01 内容
             NODE_CONTENT_RESPONSE_N02,          # Phase 2.5: N02 内容
             NODE_CONTENT_RESPONSE_N03,          # Phase 2.5: N03 内容
@@ -372,6 +433,7 @@ class TestCartridgeFactoryIntegration:
     async def test_summary_output(self, tmp_path):
         responses = [
             EXTRACTION_RESPONSE,
+            MISS_RESPONSE,
             BUILD_RESPONSE,
             NODE_CONTENT_RESPONSE_N01,
             NODE_CONTENT_RESPONSE_N02,
@@ -392,3 +454,32 @@ class TestCartridgeFactoryIntegration:
         summary = output.summary()
         assert "test" in summary
         assert "100.0%" in summary
+
+    @pytest.mark.asyncio
+    async def test_pipeline_without_second_pass(self, tmp_path):
+        """测试禁用二次查漏的流程"""
+        responses = [
+            EXTRACTION_RESPONSE,               # Phase 1 round 1 only
+            BUILD_RESPONSE,                    # Phase 2
+            NODE_CONTENT_RESPONSE_N01,
+            NODE_CONTENT_RESPONSE_N02,
+            NODE_CONTENT_RESPONSE_N03,
+            AUDIT_RESPONSE,                     # Phase 3
+            VALIDATE_RESPONSE,                  # Phase 4 × 4
+            VALIDATE_RESPONSE,
+            VALIDATE_RESPONSE,
+            VALIDATE_RESPONSE,
+        ]
+        fake_llm = make_fake_llm(responses)
+        factory = CartridgeFactory(fake_llm)
+        factory.extractor.enable_second_pass = False  # 禁用二次查漏
+
+        output = await factory.manufacture(
+            title="测试",
+            content="内容",
+            cartridge_id="test-nosp",
+            output_dir=str(tmp_path),
+        )
+
+        assert output.total_kps == 6
+        assert output.coverage == 100.0
