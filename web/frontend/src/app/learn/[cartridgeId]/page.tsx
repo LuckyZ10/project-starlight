@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -22,6 +22,7 @@ export default function LearnPage() {
   const [cartridge, setCartridge] = useState<CartridgeData | null>(null);
   const [input, setInput] = useState("");
   const [showLogin, setShowLogin] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
@@ -34,10 +35,11 @@ export default function LearnPage() {
   const currentNode = cartridge?.nodes.find((n) => n.id === currentNodeId);
   const nodeMessages = currentNodeId ? messages[currentNodeId] || [] : [];
 
-  const selectNode = (nodeId: string) => {
+  const selectNode = useCallback((nodeId: string) => {
     setCurrentNode(nodeId);
     setQuestion(null);
-  };
+    setSidebarOpen(false); // close sidebar on mobile after selection
+  }, []);
 
   const sendMessage = async () => {
     if (!input.trim() || !currentNodeId || isStreaming) return;
@@ -72,7 +74,7 @@ export default function LearnPage() {
   };
 
   return (
-    <div className="h-screen flex">
+    <div className="h-screen flex relative">
       {/* Login Modal */}
       {showLogin && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -88,8 +90,15 @@ export default function LearnPage() {
         </div>
       )}
 
+      {/* Sidebar Overlay (mobile) */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <div className="w-72 border-r-2 border-[var(--border)] bg-white flex flex-col">
+      <div className={`w-72 border-r-2 border-[var(--border)] bg-white flex flex-col z-40 transition-transform duration-200
+        fixed md:relative inset-y-0 left-0 h-full
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
         <div className="p-4 border-b-2 border-[var(--border)]">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{cartridge?.title || "Loading..."}</h2>
@@ -122,10 +131,14 @@ export default function LearnPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Top bar */}
-        <div className="px-6 py-3 border-b-2 border-[var(--border)] bg-white">
-          <h2 className="font-bold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <div className="px-4 py-3 border-b-2 border-[var(--border)] bg-white flex items-center gap-3">
+          {/* Mobile hamburger */}
+          <button onClick={() => setSidebarOpen(true)} className="md:hidden pixel-btn text-sm px-2 py-1" aria-label="Open sidebar">☰</button>
+          <h2 className="font-bold text-sm md:text-base truncate" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
             {currentNode ? `${currentNode.id}: ${currentNode.title}` : "Select a node to start"}
           </h2>
+          {/* Mobile DAG button */}
+          <button onClick={() => router.push(`/learn/${cartridgeId}/dag`)} className="md:hidden pixel-btn text-xs px-2 py-1 ml-auto">🗺️</button>
         </div>
 
         {/* Chat messages */}
@@ -134,6 +147,8 @@ export default function LearnPage() {
             <div className="text-center text-[var(--text-muted)] mt-20">
               <div className="text-4xl mb-4">🎮</div>
               <p>Select a node from the sidebar to start learning</p>
+              {/* Mobile hint */}
+              <button onClick={() => setSidebarOpen(true)} className="md:hidden mt-4 pixel-btn pixel-btn-primary text-sm">☰ Open Nodes</button>
             </div>
           )}
 
@@ -181,14 +196,14 @@ export default function LearnPage() {
         </div>
 
         {/* Input */}
-        <div className="px-6 py-4 border-t-2 border-[var(--border)] bg-white">
-          <div className="flex gap-3">
+        <div className="px-3 md:px-6 py-3 md:py-4 border-t-2 border-[var(--border)] bg-white">
+          <div className="flex gap-2 md:gap-3">
             <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-              placeholder={currentNodeId ? "Type your answer or ask a question..." : "Select a node first"}
+              placeholder={currentNodeId ? "Type your answer..." : "Select a node first"}
               disabled={!currentNodeId || isStreaming}
-              className="flex-1 px-4 py-3 border-2 border-[var(--border)] rounded-lg bg-white focus:outline-none focus:border-[var(--accent-light)] disabled:opacity-50 text-sm" />
+              className="flex-1 px-3 md:px-4 py-2 md:py-3 border-2 border-[var(--border)] rounded-lg bg-white focus:outline-none focus:border-[var(--accent-light)] disabled:opacity-50 text-sm" />
             <button onClick={sendMessage} disabled={!currentNodeId || isStreaming || !input.trim()}
-              className="pixel-btn pixel-btn-primary px-6 disabled:opacity-50">
+              className="pixel-btn pixel-btn-primary px-4 md:px-6 disabled:opacity-50 text-sm">
               {isStreaming ? "..." : "Send"}
             </button>
           </div>

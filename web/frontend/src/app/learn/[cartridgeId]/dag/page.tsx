@@ -176,18 +176,18 @@ export default function DagPage() {
 
   return (
     <div className="h-screen flex flex-col" style={{ background: "#f5f6fa" }}>
-      <div className="px-4 py-3 border-b-2 border-[var(--border)] bg-white flex items-center gap-4">
+      <div className="px-3 md:px-4 py-2 md:py-3 border-b-2 border-[var(--border)] bg-white flex items-center gap-2 md:gap-4 flex-wrap">
         <button
           onClick={() => router.push(`/learn/${cartridgeId}`)}
           className="pixel-btn pixel-btn-primary text-sm"
         >
-          ← Back to Chat
+          ← Back
         </button>
-        <h2 className="font-bold text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          🗺️ DAG — {cartridge.title}
+        <h2 className="font-bold text-sm truncate" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          🗺️ {cartridge.title}
         </h2>
-        <span className="text-xs text-[var(--text-muted)]">
-          {cartridge.progress.completed}/{cartridge.progress.total} completed
+        <span className="text-xs text-[var(--text-muted)] ml-auto">
+          {cartridge.progress.completed}/{cartridge.progress.total} ✅
         </span>
       </div>
       <div className="flex-1">
