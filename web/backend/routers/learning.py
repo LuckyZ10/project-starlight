@@ -139,7 +139,11 @@ type 可选: single_choice, multi_choice, fill_blank, judgment
         # (we can't easily do async DB here, so we'll skip for now)
         yield "data: [DONE]\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/answer")

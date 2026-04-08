@@ -48,12 +48,30 @@ export async function* chatStream(
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+    // SSE events are separated by blank lines (\n\n)
+    const events = buffer.split('\n\n');
+    buffer = events.pop() || '';
+    for (const event of events) {
+      for (const line of event.split('\n')) {
+        if (line.startsWith('data: ')) {
+          const payload = line.slice(6);
+          if (payload === '[DONE]') return;
+          try {
+            const data = JSON.parse(payload);
+            if (data.text) yield data.text;
+          } catch {}
+        }
+      }
+    }
+  }
+  // Process remaining buffer
+  if (buffer.trim()) {
+    for (const line of buffer.split('\n')) {
+      if (line.startsWith('data: ')) {
+        const payload = line.slice(6);
+        if (payload === '[DONE]') return;
         try {
-          const data = JSON.parse(line.slice(6));
+          const data = JSON.parse(payload);
           if (data.text) yield data.text;
         } catch {}
       }
