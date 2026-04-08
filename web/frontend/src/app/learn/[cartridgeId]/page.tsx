@@ -91,7 +91,10 @@ export default function LearnPage() {
       {/* Sidebar */}
       <div className="w-72 border-r-2 border-[var(--border)] bg-white flex flex-col">
         <div className="p-4 border-b-2 border-[var(--border)]">
-          <h2 className="font-bold text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{cartridge?.title || "Loading..."}</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{cartridge?.title || "Loading..."}</h2>
+            <button onClick={() => router.push(`/learn/${cartridgeId}/dag`)} className="pixel-btn text-xs px-2 py-1" title="View DAG">🗺️ DAG</button>
+          </div>
           {cartridge && (
             <div className="mt-2">
               <div className="flex justify-between text-xs text-[var(--text-muted)] mb-1">
