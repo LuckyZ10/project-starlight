@@ -1,0 +1,758 @@
+{
+  "id": "transformer-v2",
+  "title": "Transformer算法完全指南",
+  "version": "1.0.0",
+  "language": "zh-CN",
+  "contributors": [
+    {
+      "name": "Cartridge Factory",
+      "role": "auto-generated",
+      "quote": "由教材制造机自动生成"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "N01",
+      "title": "向量的直观理解与维度权衡",
+      "file": "nodes/N01-向量的直观理解与维度权衡.md",
+      "prerequisites": [],
+      "difficulty": 1,
+      "pass_criteria": "能举例说明向量的直观物理/几何意义，列举Transformer向量的典型维度，并解释维度选择在信息表达与计算复杂度上的权衡。",
+      "kp_ids": [
+        "KP-001",
+        "KP-002",
+        "KP-003"
+      ]
+    },
+    {
+      "id": "N02",
+      "title": "矩阵乘法与计算加速",
+      "file": "nodes/N02-矩阵乘法与计算加速.md",
+      "prerequisites": [
+        "N01"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能计算给定形状的矩阵乘法结果维度，列举其在Transformer中的三大核心应用场景，并解释复杂度、分块策略及Tensor Core加速机制。",
+      "kp_ids": [
+        "KP-004",
+        "KP-005",
+        "KP-006",
+        "KP-007",
+        "KP-051",
+        "KP-052"
+      ]
+    },
+    {
+      "id": "N03",
+      "title": "点积运算与缩放因子",
+      "file": "nodes/N03-点积运算与缩放因子.md",
+      "prerequisites": [
+        "N01"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能解释点积的几何意义，说明点积作为相似度度量的三大优势，并从方差和数值稳定性角度推导/解释引入缩放因子1/√d_k的根本原因。",
+      "kp_ids": [
+        "KP-008",
+        "KP-009",
+        "KP-053"
+      ]
+    },
+    {
+      "id": "N04",
+      "title": "Softmax函数与温度参数",
+      "file": "nodes/N04-Softmax函数与温度参数.md",
+      "prerequisites": [
+        "N03"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能写出Softmax公式并说明其三大关键性质，解释“减去最大值”技巧如何解决数值溢出，以及说明温度参数如何控制生成文本的分布。",
+      "kp_ids": [
+        "KP-010",
+        "KP-011",
+        "KP-012"
+      ]
+    },
+    {
+      "id": "N05",
+      "title": "交叉熵损失与标签平滑",
+      "file": "nodes/N05-交叉熵损失与标签平滑.md",
+      "prerequisites": [
+        "N04"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能写出交叉熵损失对logits的梯度公式并解释其计算高效性，说明标签平滑如何防止模型过度自信。",
+      "kp_ids": [
+        "KP-013",
+        "KP-014"
+      ]
+    },
+    {
+      "id": "N06",
+      "title": "线性变换与权重初始化",
+      "file": "nodes/N06-线性变换与权重初始化.md",
+      "prerequisites": [
+        "N02"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能对照维度表格说明线性变换在Transformer各层的应用，阐述Xavier/He初始化的原理，并解释嵌入层初始化乘以√d_model的目的。",
+      "kp_ids": [
+        "KP-015",
+        "KP-016",
+        "KP-017"
+      ]
+    },
+    {
+      "id": "N07",
+      "title": "梯度下降与学习率调度",
+      "file": "nodes/N07-梯度下降与学习率调度.md",
+      "prerequisites": [
+        "N05"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能说明学习率大小对训练的影响，列举Adam优化器的典型超参数，并解释学习率预热及衰减机制的工程必要性。",
+      "kp_ids": [
+        "KP-018",
+        "KP-019",
+        "KP-020"
+      ]
+    },
+    {
+      "id": "N08",
+      "title": "神经元结构与激活函数",
+      "file": "nodes/N08-神经元结构与激活函数.md",
+      "prerequisites": [
+        "N06"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能解释权重和偏置的作用，对比Sigmoid、Tanh、ReLU、GELU的公式、范围及梯度饱和问题。",
+      "kp_ids": [
+        "KP-021",
+        "KP-022",
+        "KP-055"
+      ]
+    },
+    {
+      "id": "N09",
+      "title": "前向传播机制与内存管理",
+      "file": "nodes/N09-前向传播机制与内存管理.md",
+      "prerequisites": [
+        "N08"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能描述Transformer编码器层前向传播的完整数据流和重复堆叠模式，并解释梯度检查点如何以计算换内存。",
+      "kp_ids": [
+        "KP-023",
+        "KP-024",
+        "KP-025",
+        "KP-054"
+      ]
+    },
+    {
+      "id": "N10",
+      "title": "反向传播与梯度流",
+      "file": "nodes/N10-反向传播与梯度流.md",
+      "prerequisites": [
+        "N09"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能解释误差信号递归回传的关键洞察，说明残差连接和层归一化的梯度传播特性，并掌握梯度检查的调试技巧。",
+      "kp_ids": [
+        "KP-026",
+        "KP-027",
+        "KP-028"
+      ]
+    },
+    {
+      "id": "N11",
+      "title": "隐藏层的抽象与特征学习",
+      "file": "nodes/N11-隐藏层的抽象与特征学习.md",
+      "prerequisites": [
+        "N09"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能对比浅、中、深层在视觉和语言任务中提取的特征，列举典型模型的层数，并解释Transformer深度与感受野的关系。",
+      "kp_ids": [
+        "KP-029",
+        "KP-030",
+        "KP-031"
+      ]
+    },
+    {
+      "id": "N12",
+      "title": "非线性激活的进阶分析",
+      "file": "nodes/N12-非线性激活的进阶分析.md",
+      "prerequisites": [
+        "N08"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能解释“死亡ReLU”问题及其变体的缓解方案，并从优化景观和生物学响应角度阐述GELU在Transformer中的优势。",
+      "kp_ids": [
+        "KP-032",
+        "KP-033"
+      ]
+    },
+    {
+      "id": "N13",
+      "title": "语言建模的核心挑战",
+      "file": "nodes/N13-语言建模的核心挑战.md",
+      "prerequisites": [
+        "N05"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能列举语言建模的四大挑战，对比字符级建模的优劣势，并解释RNN的两大困境及Transformer如何克服它们。",
+      "kp_ids": [
+        "KP-034",
+        "KP-035",
+        "KP-036"
+      ]
+    },
+    {
+      "id": "N14",
+      "title": "训练数据构造与掩码机制",
+      "file": "nodes/N14-训练数据构造与掩码机制.md",
+      "prerequisites": [
+        "N13"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能说明[BOS]/[EOS]的作用，解释随机采样构造数据的工程实现，并阐述填充掩码如何保证因果性和正确计算。",
+      "kp_ids": [
+        "KP-037",
+        "KP-038",
+        "KP-039"
+      ]
+    },
+    {
+      "id": "N15",
+      "title": "独热编码的局限与词嵌入",
+      "file": "nodes/N15-独热编码的局限与词嵌入.md",
+      "prerequisites": [
+        "N02",
+        "N13"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能说明独热编码的两大局限，阐述稠密向量的分布假设和关系模式，解释嵌入层的查找表本质，并说明端到端训练及权重绑定的原理。",
+      "kp_ids": [
+        "KP-040",
+        "KP-041",
+        "KP-042",
+        "KP-043",
+        "KP-044",
+        "KP-045",
+        "KP-046",
+        "KP-047"
+      ]
+    },
+    {
+      "id": "N16",
+      "title": "词嵌入的四大训练范式",
+      "file": "nodes/N16-词嵌入的四大训练范式.md",
+      "prerequisites": [
+        "N15"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能对比Skip-gram、CBOW、MLM、CLM四种范式的核心思想，并解释联合训练如何通过交叉熵学到有意义的表示。",
+      "kp_ids": [
+        "KP-048",
+        "KP-049",
+        "KP-050"
+      ]
+    },
+    {
+      "id": "N17",
+      "title": "BPE分词算法与未登录词处理",
+      "file": "nodes/N17-BPE分词算法与未登录词处理.md",
+      "prerequisites": [
+        "N15"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能描述BPE算法的流程及词尾标记作用，说明GPT系列的词汇表规模，并解释BPE处理未登录词和罕见字符的机制。",
+      "kp_ids": [
+        "KP-056",
+        "KP-057",
+        "KP-058",
+        "KP-059",
+        "KP-064"
+      ]
+    },
+    {
+      "id": "N18",
+      "title": "词汇表大小的工程权衡",
+      "file": "nodes/N18-词汇表大小的工程权衡.md",
+      "prerequisites": [
+        "N17"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能阐述多语言模型词汇表大小的需求，解释词汇表大小设为2的幂次如何优化GPU计算，并指出英语词汇表的效率平衡点。",
+      "kp_ids": [
+        "KP-060",
+        "KP-061",
+        "KP-085"
+      ]
+    },
+    {
+      "id": "N19",
+      "title": "序列顺序与位置编码",
+      "file": "nodes/N19-序列顺序与位置编码.md",
+      "prerequisites": [
+        "N09"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能解释自注意力的置换等变性及RNN的位置编码方式，阐述正弦编码的多尺度频率特性与外推局限，并说明RoPE的相对位置机制。",
+      "kp_ids": [
+        "KP-062",
+        "KP-063",
+        "KP-065",
+        "KP-066",
+        "KP-084"
+      ]
+    },
+    {
+      "id": "N20",
+      "title": "注意力机制核心组件",
+      "file": "nodes/N20-注意力机制核心组件.md",
+      "prerequisites": [
+        "N03",
+        "N09"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能解释QKV分离的角色设计，说明点积作为相似度度量的优势，并从数学和实验角度解释为什么必须除以√d_k。",
+      "kp_ids": [
+        "KP-067",
+        "KP-068",
+        "KP-069",
+        "KP-070"
+      ]
+    },
+    {
+      "id": "N21",
+      "title": "注意力可视化与高效计算",
+      "file": "nodes/N21-注意力可视化与高效计算.md",
+      "prerequisites": [
+        "N20"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能说明注意力解释的局限性与间接性，并解释Flash Attention通过分块计算降低内存复杂度的机制。",
+      "kp_ids": [
+        "KP-071",
+        "KP-077"
+      ]
+    },
+    {
+      "id": "N22",
+      "title": "多头注意力与头拼接",
+      "file": "nodes/N22-多头注意力与头拼接.md",
+      "prerequisites": [
+        "N20"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能解释多头注意力的涌现分工现象，阐述输出投影矩阵W^O的三大作用，并说明头维度向上取整至2的幂次的硬件优化动机。",
+      "kp_ids": [
+        "KP-072",
+        "KP-073",
+        "KP-074",
+        "KP-086"
+      ]
+    },
+    {
+      "id": "N23",
+      "title": "前馈网络(FFN)子层",
+      "file": "nodes/N23-前馈网络FFN子层.md",
+      "prerequisites": [
+        "N09"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能解释FFN的位置独立特性和非线性变换作用，并指出其在模型参数量中的占比。",
+      "kp_ids": [
+        "KP-075",
+        "KP-076"
+      ]
+    },
+    {
+      "id": "N24",
+      "title": "残差连接与层归一化",
+      "file": "nodes/N24-残差连接与层归一化.md",
+      "prerequisites": [
+        "N10"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能写出层归一化的计算公式，对比其与批归一化的不同，并解释Pre-Norm架构对深层网络训练稳定性的改善。",
+      "kp_ids": [
+        "KP-078",
+        "KP-079"
+      ]
+    },
+    {
+      "id": "N25",
+      "title": "掩码机制与自回归生成",
+      "file": "nodes/N25-掩码机制与自回归生成.md",
+      "prerequisites": [
+        "N04",
+        "N20",
+        "N14"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能说明因果掩码(-∞/下三角矩阵)的具体实现，并解释训练时并行与推理时逐词生成的自回归特性。",
+      "kp_ids": [
+        "KP-080",
+        "KP-081"
+      ]
+    },
+    {
+      "id": "N26",
+      "title": "编码器-解码器与输出生成",
+      "file": "nodes/N26-编码器-解码器与输出生成.md",
+      "prerequisites": [
+        "N20",
+        "N15"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能说明交叉注意力权重矩阵的形状与词对齐意义，并解释输出层权重绑定的策略与收益。",
+      "kp_ids": [
+        "KP-082",
+        "KP-083"
+      ]
+    },
+    {
+      "id": "N27",
+      "title": "Dropout正则化机制",
+      "file": "nodes/N27-Dropout正则化机制.md",
+      "prerequisites": [
+        "N09",
+        "N19"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能解释在残差输出和位置编码相加后应用Dropout的两大具体作用。",
+      "kp_ids": [
+        "KP-087",
+        "KP-088"
+      ]
+    },
+    {
+      "id": "N28",
+      "title": "自监督学习范式",
+      "file": "nodes/N28-自监督学习范式.md",
+      "prerequisites": [
+        "N13"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能说明T5(Span Corruption)与GPT(CLM)两大预训练范式的核心机制、优势与局限。",
+      "kp_ids": [
+        "KP-089",
+        "KP-090"
+      ]
+    },
+    {
+      "id": "N29",
+      "title": "混合精度与分布式训练",
+      "file": "nodes/N29-混合精度与分布式训练.md",
+      "prerequisites": [
+        "N07"
+      ],
+      "difficulty": 4,
+      "pass_criteria": "能说明BF16的数据范围优势，指出流水线并行的通信开销来源，并解释异步检查点如何避免阻塞训练。",
+      "kp_ids": [
+        "KP-091",
+        "KP-092",
+        "KP-093"
+      ]
+    },
+    {
+      "id": "N30",
+      "title": "高级注意力变体",
+      "file": "nodes/N30-高级注意力变体.md",
+      "prerequisites": [
+        "N20"
+      ],
+      "difficulty": 4,
+      "pass_criteria": "能对比BigBird、Performer、Linformer降低复杂度的核心思想，并解释Flash Attention在IO优化上的机制。",
+      "kp_ids": [
+        "KP-095",
+        "KP-096",
+        "KP-097",
+        "KP-098"
+      ]
+    },
+    {
+      "id": "N31",
+      "title": "T5统一框架设计",
+      "file": "nodes/N31-T5统一框架设计.md",
+      "prerequisites": [
+        "N28",
+        "N26"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能说明T5框架如何通过添加特定前缀将分类等不同任务统一为文本到文本的生成格式。",
+      "kp_ids": [
+        "KP-094"
+      ]
+    },
+    {
+      "id": "N32",
+      "title": "深度学习框架基础",
+      "file": "nodes/N32-深度学习框架基础.md",
+      "prerequisites": [
+        "N02"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能说明Tensor的关键属性及nn.Module中定义网络层与前向传播的规范。",
+      "kp_ids": [
+        "KP-099",
+        "KP-100"
+      ]
+    },
+    {
+      "id": "N33",
+      "title": "GPU环境与模型检查点",
+      "file": "nodes/N33-GPU环境与模型检查点.md",
+      "prerequisites": [
+        "N32"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能列出CUDA配置的完整流程，并写出保存与加载包含状态字典的标准检查点代码逻辑。",
+      "kp_ids": [
+        "KP-101",
+        "KP-102"
+      ]
+    },
+    {
+      "id": "N34",
+      "title": "模型服务化与API部署",
+      "file": "nodes/N34-模型服务化与API部署.md",
+      "prerequisites": [
+        "N33"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能对比gRPC与REST API的特性及适用场景，并列举专用模型服务器的核心优势。",
+      "kp_ids": [
+        "KP-103",
+        "KP-105"
+      ]
+    },
+    {
+      "id": "N35",
+      "title": "动态批处理与显存优化",
+      "file": "nodes/N35-动态批处理与显存优化.md",
+      "prerequisites": [
+        "N34"
+      ],
+      "difficulty": 4,
+      "pass_criteria": "能解释vLLM连续批处理通过迭代级调度提升利用率的机制，以及QLoRA结合量化和分页优化器降低微调显存的工程方案。",
+      "kp_ids": [
+        "KP-104",
+        "KP-106"
+      ]
+    },
+    {
+      "id": "N36",
+      "title": "HuggingFace社区生态",
+      "file": "nodes/N36-HuggingFace社区生态.md",
+      "prerequisites": [
+        "N33"
+      ],
+      "difficulty": 2,
+      "pass_criteria": "能列举HuggingFace Hub的核心功能（版本控制、模型卡片、推理API、Spaces等）及社区规模。",
+      "kp_ids": [
+        "KP-107",
+        "KP-108",
+        "KP-109",
+        "KP-110"
+      ]
+    },
+    {
+      "id": "N37",
+      "title": "长文本处理与架构演进",
+      "file": "nodes/N37-长文本处理与架构演进.md",
+      "prerequisites": [
+        "N20",
+        "N19"
+      ],
+      "difficulty": 4,
+      "pass_criteria": "能解释O(n²)瓶颈，区分稀疏注意力、线性注意力、位置外推、硬件感知优化及Mamba等状态空间模型的架构演进思路。",
+      "kp_ids": [
+        "KP-111",
+        "KP-112",
+        "KP-113",
+        "KP-114",
+        "KP-115",
+        "KP-116"
+      ]
+    },
+    {
+      "id": "N38",
+      "title": "模型计算效率优化栈",
+      "file": "nodes/N38-模型计算效率优化栈.md",
+      "prerequisites": [
+        "N29",
+        "N37"
+      ],
+      "difficulty": 4,
+      "pass_criteria": "能从算法层、系统层和硬件层分别举例说明模型计算效率优化的核心手段与目的。",
+      "kp_ids": [
+        "KP-117",
+        "KP-118",
+        "KP-119"
+      ]
+    },
+    {
+      "id": "N39",
+      "title": "多模态大模型基础",
+      "file": "nodes/N39-多模态大模型基础.md",
+      "prerequisites": [
+        "N26",
+        "N15"
+      ],
+      "difficulty": 3,
+      "pass_criteria": "能阐述CLIP、DALL-E、GPT-4V、Sora的核心思想，并解释统一多模态嵌入空间对跨模态智能的意义。",
+      "kp_ids": [
+        "KP-120",
+        "KP-121",
+        "KP-122",
+        "KP-123",
+        "KP-124"
+      ]
+    },
+    {
+      "id": "N40",
+      "title": "世界模型与高级推理",
+      "file": "nodes/N40-世界模型与高级推理.md",
+      "prerequisites": [
+        "N39"
+      ],
+      "difficulty": 4,
+      "pass_criteria": "能解释世界模型的概念，阐述链式推理、思维树、工具使用如何提升模型能力，并指出当前模型在因果推理上的局限。",
+      "kp_ids": [
+        "KP-125",
+        "KP-126",
+        "KP-127",
+        "KP-128",
+        "KP-129"
+      ]
+    },
+    {
+      "id": "N41",
+      "title": "注意力解释与模型对齐",
+      "file": "nodes/N41-注意力解释与模型对齐.md",
+      "prerequisites": [
+        "N21",
+        "N28"
+      ],
+      "difficulty": 5,
+      "pass_criteria": "能批判性分析注意力可视化的误导性，列举更可靠的解释方法；对比RLHF、宪法AI、RLAIF的局限，并阐述AI安全的根本挑战。",
+      "kp_ids": [
+        "KP-130",
+        "KP-131",
+        "KP-132",
+        "KP-133",
+        "KP-134",
+        "KP-135"
+      ]
+    }
+  ],
+  "dag": {
+    "entry": "N01",
+    "edges": {
+      "N01": [
+        "N02",
+        "N03"
+      ],
+      "N02": [
+        "N06",
+        "N15",
+        "N32"
+      ],
+      "N03": [
+        "N04",
+        "N20"
+      ],
+      "N04": [
+        "N05",
+        "N25"
+      ],
+      "N05": [
+        "N07",
+        "N13"
+      ],
+      "N06": [
+        "N08"
+      ],
+      "N07": [
+        "N29"
+      ],
+      "N08": [
+        "N09",
+        "N12"
+      ],
+      "N09": [
+        "N10",
+        "N11",
+        "N19",
+        "N20",
+        "N23",
+        "N27"
+      ],
+      "N10": [
+        "N24"
+      ],
+      "N13": [
+        "N14",
+        "N15",
+        "N28"
+      ],
+      "N14": [
+        "N25"
+      ],
+      "N15": [
+        "N16",
+        "N17",
+        "N26",
+        "N39"
+      ],
+      "N17": [
+        "N18"
+      ],
+      "N19": [
+        "N27",
+        "N37"
+      ],
+      "N20": [
+        "N21",
+        "N22",
+        "N25",
+        "N26",
+        "N30",
+        "N37",
+        "N41"
+      ],
+      "N26": [
+        "N31",
+        "N39"
+      ],
+      "N28": [
+        "N31",
+        "N41"
+      ],
+      "N29": [
+        "N38"
+      ],
+      "N32": [
+        "N33"
+      ],
+      "N33": [
+        "N34",
+        "N36"
+      ],
+      "N34": [
+        "N35"
+      ],
+      "N37": [
+        "N38"
+      ],
+      "N39": [
+        "N40"
+      ],
+      "N21": [
+        "N41"
+      ]
+    }
+  }
+}
