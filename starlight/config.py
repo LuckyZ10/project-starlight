@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost/0"
 
     # LLM
-    llm_model: str = "glm-4-flash"
+    llm_model: str = "glm-5.1"
     llm_api_key: str = ""
     llm_base_url: str = "https://open.bigmodel.cn/api/anthropic"
 

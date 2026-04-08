@@ -60,13 +60,20 @@ class ExtractionResult:
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     def deduplicate(self) -> None:
-        """去除重复的知识点（基于 statement 相似度）"""
+        """去除重复的知识点（基于完整语句归一化匹配）"""
         seen_statements: dict[str, str] = {}  # normalized -> id
         unique: list[KnowledgePoint] = []
 
         for kp in self.knowledge_points:
-            # 归一化：去空格、转小写、取前 80 字符
-            normalized = re.sub(r'\s+', '', kp.statement.lower())[:80]
+            # 归一化：去空白+去标点+小写（完整语句匹配，不截断）
+            normalized = kp.statement.lower()
+            # 去除常见中文标点
+            for ch in '，。；：！？（）【】「」《》、～…—':
+                normalized = normalized.replace(ch, '')
+            # 去除英文标点和空白
+            normalized = re.sub(r'[,.;:!?()\[\]{}"\'\'\s]', '', normalized)
+            if not normalized:
+                continue
             if normalized in seen_statements:
                 logger.debug("Dedup: merging %s into %s", kp.id, seen_statements[normalized])
                 continue

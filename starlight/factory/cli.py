@@ -48,7 +48,7 @@ async def run(args):
 
         kwargs = {
             "model": settings.llm_model,
-            "max_tokens": 4096,
+            "max_tokens": 131072,
             "messages": chat_messages,
         }
         if system_text:

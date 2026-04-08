@@ -79,7 +79,21 @@ class CoverageAuditor:
         ]
 
         logger.info("Phase 3: auditing coverage of %d KPs...", extraction.total)
-        response = await self._call_llm(messages)
+
+        # 重试逻辑（API 偶发 500）
+        for attempt in range(5):
+            try:
+                response = await self._call_llm(messages)
+                break
+            except Exception as e:
+                if attempt < 4:
+                    wait = [10, 20, 30, 40][attempt]
+                    logger.warning("Phase 3: API error (attempt %d), retrying in %ds: %s", attempt + 1, wait, e)
+                    import asyncio
+                    await asyncio.sleep(wait)
+                else:
+                    raise
+
         return self._parse_audit_response(response, extraction.total)
 
     def _parse_audit_response(self, response: str, total: int) -> CoverageReport:

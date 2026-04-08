@@ -50,6 +50,7 @@ class BuildResult:
                     "prerequisites": n.prerequisites,
                     "difficulty": n.difficulty,
                     "pass_criteria": n.pass_criteria,
+                    "kp_ids": n.kp_ids,
                 }
                 for n in self.nodes
             ],
