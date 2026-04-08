@@ -54,8 +54,12 @@ async def run(args):
         if system_text:
             kwargs["system"] = system_text
 
-        response = await client.messages.create(**kwargs)
-        return response.content[0].text
+        # Use streaming to avoid 10-min timeout limit
+        collected = []
+        async with client.messages.stream(**kwargs) as stream:
+            async for text in stream.text_stream:
+                collected.append(text)
+        return "".join(collected)
 
     # 读取输入
     with open(args.input, encoding="utf-8") as f:
