@@ -77,7 +77,7 @@ async def test_register_and_login(client):
         "email": "test@example.com",
         "password": "secret123",
     })
-    assert r2.status_code == 400
+    assert r2.status_code == 409
 
     # Login
     r3 = await client.post("/api/auth/login", json={

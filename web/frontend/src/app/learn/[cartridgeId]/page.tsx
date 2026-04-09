@@ -5,8 +5,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { api, chatStream } from "@/lib/api";
+import { api, chatStream, ApiError } from "@/lib/api";
 import { useAuthStore, useLearningStore } from "@/lib/store";
+import { showToast } from "@/components/Toast";
 
 interface NodeInfo { id: string; title: string; difficulty: number; prerequisites: string[]; pass_criteria: string; status: string; score: number | null }
 interface CartridgeData { id: string; title: string; nodes: NodeInfo[]; progress: { completed: number; total: number }; dag: Record<string, unknown> }
@@ -28,7 +29,10 @@ export default function LearnPage() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
 
   useEffect(() => {
-    if (token) { api.getCartridge(cartridgeId).then(setCartridge).catch(console.error); }
+    if (token) { api.getCartridge(cartridgeId).then(setCartridge).catch((err) => {
+      if (err instanceof ApiError && err.status === 401) { setShowLogin(true); }
+      else { showToast('error', `Failed to load cartridge: ${err.message}`); }
+    }); }
     else { setShowLogin(true); }
   }, [cartridgeId, token]);
 
@@ -56,8 +60,10 @@ export default function LearnPage() {
         appendStreamText(text);
       }
       finalizeStream(currentNodeId);
-    } catch (err) {
-      appendStreamText(`\n\n❌ Error: ${err}`);
+    } catch (err: any) {
+      const msg = err instanceof ApiError ? err.message : 'Connection error. Please try again.';
+      showToast('error', msg);
+      appendStreamText(`\n\n❌ ${msg}`);
       finalizeStream(currentNodeId);
     }
     setIsStreaming(false);
@@ -65,7 +71,9 @@ export default function LearnPage() {
 
   const submitAnswer = async (answer: string | number | number[], correct: boolean) => {
     if (!currentNodeId || !currentQuestion) return;
-    await api.submitAnswer({ cartridge_id: cartridgeId, node_id: currentNodeId, question_type: currentQuestion.type, user_answer: String(answer), correct_answer: String(currentQuestion.answer), correct });
+    await api.submitAnswer({ cartridge_id: cartridgeId, node_id: currentNodeId, question_type: currentQuestion.type, user_answer: String(answer), correct_answer: String(currentQuestion.answer), correct }).catch((err) => {
+      showToast('warning', `Failed to save answer: ${err.message}`);
+    });
     if (correct) {
       resetWrongCount();
       setQuestion(null);

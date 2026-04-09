@@ -1,41 +1,55 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
-interface Toast {
-  id: number;
-  message: string;
-  type: "success" | "error" | "info";
+export interface ToastMessage {
+  id: string;
+  type: "error" | "success" | "warning" | "info";
+  text: string;
+  duration?: number;
 }
 
-let toastId = 0;
-const listeners: Set<(t: Toast) => void> = new Set();
+let addToastFn: ((t: Omit<ToastMessage, "id">) => void) | null = null;
 
-export function showToast(message: string, type: Toast["type"] = "info") {
-  const t: Toast = { id: ++toastId, message, type };
-  listeners.forEach((fn) => fn(t));
+/** Call from anywhere to show a toast */
+export function showToast(type: ToastMessage["type"], text: string, duration = 5000) {
+  addToastFn?.({ type, text, duration });
 }
 
 export default function ToastContainer() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  useEffect(() => {
-    const handler = (t: Toast) => {
-      setToasts((prev) => [...prev, t]);
-      setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== t.id)), 4000);
-    };
-    listeners.add(handler);
-    return () => { listeners.delete(handler); };
+  const addToast = useCallback((t: Omit<ToastMessage, "id">) => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((prev) => [...prev, { ...t, id }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((x) => x.id !== id));
+    }, t.duration || 5000);
   }, []);
 
+  useEffect(() => {
+    addToastFn = addToast;
+    return () => { addToastFn = null; };
+  }, [addToast]);
+
+  const dismiss = (id: string) => setToasts((prev) => prev.filter((x) => x.id !== id));
+
+  if (toasts.length === 0) return null;
+
+  const colors: Record<string, string> = {
+    error: "bg-red-600 text-white",
+    success: "bg-green-600 text-white",
+    warning: "bg-yellow-500 text-black",
+    info: "bg-blue-600 text-white",
+  };
+  const icons: Record<string, string> = { error: "✕", success: "✓", warning: "⚠", info: "ℹ" };
+
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
+    <div className="fixed bottom-4 right-4 z-[100] space-y-2 max-w-sm">
       {toasts.map((t) => (
-        <div key={t.id} className={`animate-slide px-4 py-3 rounded shadow-lg text-sm font-medium max-w-sm ${
-          t.type === "error" ? "bg-[var(--error)] text-white" :
-          t.type === "success" ? "bg-[var(--success)] text-white" :
-          "bg-white border-2 border-[var(--border)] text-[var(--text-primary)]"
-        }`}>
-          {t.type === "error" ? "❌ " : t.type === "success" ? "✅ " : "ℹ️ "}{t.message}
+        <div key={t.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg animate-slide ${colors[t.type]}`}>
+          <span className="text-lg">{icons[t.type]}</span>
+          <span className="text-sm flex-1">{t.text}</span>
+          <button onClick={() => dismiss(t.id)} className="opacity-70 hover:opacity-100 text-lg">×</button>
         </div>
       ))}
     </div>

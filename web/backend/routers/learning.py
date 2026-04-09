@@ -47,18 +47,34 @@ async def chat(
     user: User = Depends(get_current_user),
 ):
     """SSE streaming chat with AI tutor."""
+    import logging
     from routers.cartridges import CARTRIDGES_DIR
+
+    log = logging.getLogger("starlight.chat")
+
+    # Validate input
+    if not req.message or not req.message.strip():
+        raise HTTPException(400, "Message cannot be empty")
+    if not req.cartridge_id or not req.node_id:
+        raise HTTPException(400, "cartridge_id and node_id are required")
+    if len(req.message) > 10000:
+        raise HTTPException(400, "Message too long (max 10000 characters)")
 
     # Read node content
     nodes_dir = CARTRIDGES_DIR / req.cartridge_id / "nodes"
+    if not nodes_dir.exists():
+        raise HTTPException(404, f"Cartridge '{req.cartridge_id}' not found")
+
     node_content = ""
     node_title = req.node_id
-    if nodes_dir.exists():
-        for f in nodes_dir.iterdir():
-            if f.name.startswith(req.node_id) and f.suffix == ".md":
-                node_content = f.read_text(encoding="utf-8")
-                node_title = f.stem.split("-", 1)[-1] if "-" in f.stem else f.stem
-                break
+    for f in nodes_dir.iterdir():
+        if f.name.startswith(req.node_id) and f.suffix == ".md":
+            node_content = f.read_text(encoding="utf-8")
+            node_title = f.stem.split("-", 1)[-1] if "-" in f.stem else f.stem
+            break
+
+    if not node_content:
+        raise HTTPException(404, f"Node '{req.node_id}' not found in cartridge '{req.cartridge_id}'")
 
     # Save user message
     user_msg = ChatMessage(
@@ -126,17 +142,23 @@ type 可选: single_choice, multi_choice, fill_blank, judgment
 <</REASONING>>"""
 
     messages = [{"role": "system", "content": system_prompt}]
-    for msg in req.history[-10:]:  # last 10 messages
-        messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+    for msg in req.history[-10:]:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if role not in ("user", "assistant"):
+            role = "user"
+        messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": req.message})
 
     async def event_stream():
         full_response = ""
-        async for chunk in stream_chat(messages):
-            full_response += chunk
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
-        # Save assistant message
-        # (we can't easily do async DB here, so we'll skip for now)
+        try:
+            async for chunk in stream_chat(messages):
+                full_response += chunk
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as e:
+            log.error("LLM streaming error: %s", e)
+            yield f"data: {json.dumps({'error': True, 'text': '⚠️ AI 导师暂时无法回复，请稍后再试'})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(

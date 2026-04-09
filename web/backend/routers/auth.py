@@ -35,9 +35,13 @@ class UserResponse(BaseModel):
 
 @router.post("/register", response_model=AuthResponse)
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if len(req.password) > 128:
+        raise HTTPException(status_code=400, detail="Password too long")
     existing = await db.execute(select(User).where(User.email == req.email))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=409, detail="Email already registered")
     user = User(email=req.email, hashed_password=hash_password(req.password))
     db.add(user)
     await db.commit()
