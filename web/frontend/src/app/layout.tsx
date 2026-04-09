@@ -15,6 +15,7 @@ const geistMono = localFont({
 
 import ThemeToggle from "@/components/ThemeToggle";
 import ToastContainer from "@/components/Toast";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 export const metadata: Metadata = {
   title: "Starlight",
@@ -39,7 +40,7 @@ export default function RootLayout({
         />
         <ThemeToggle />
         <ToastContainer />
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
       </body>
     </html>
   );

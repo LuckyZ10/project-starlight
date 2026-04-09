@@ -21,7 +21,7 @@ export default function LandingPage() {
   useEffect(() => {
     api.listCartridges()
       .then(setCartridges)
-      .catch(() => showToast("Failed to load cartridges", "error"))
+      .catch(() => showToast("error", "Failed to load cartridges"))
       .finally(() => setLoading(false));
   }, []);
 
