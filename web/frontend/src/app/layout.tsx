@@ -20,6 +20,13 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 export const metadata: Metadata = {
   title: "Starlight",
   description: "Interactive AI-powered learning platform",
+  manifest: "/manifest.json",
+  themeColor: "#d97706",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Starlight",
+  },
 };
 
 export default function RootLayout({
