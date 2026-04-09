@@ -13,6 +13,8 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
+import ThemeToggle from "@/components/ThemeToggle";
+
 export const metadata: Metadata = {
   title: "Starlight",
   description: "Interactive AI-powered learning platform",
@@ -24,15 +26,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+        <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()` }} />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
           crossOrigin="anonymous"
         />
+        <ThemeToggle />
         {children}
       </body>
     </html>

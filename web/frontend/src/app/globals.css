@@ -20,6 +20,22 @@
   --error: #ef476f;
 }
 
+.dark {
+  --bg-primary: #0d1b12;
+  --bg-card: #162420;
+  --accent: #52b788;
+  --accent-light: #74c69d;
+  --accent-hover: #40916c;
+  --text-primary: #d8f3dc;
+  --text-secondary: #95d5b2;
+  --text-muted: #52796f;
+  --border: #40916c;
+  --border-light: #2d6a4f;
+  --success: #52b788;
+  --warning: #ffd166;
+  --error: #ef476f;
+}
+
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -43,7 +59,7 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   transition: all 0.15s ease;
   cursor: pointer;
-  background: white;
+  background: var(--bg-card);
   color: var(--accent);
 }
 
@@ -89,7 +105,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .chat-markdown p { margin: 4px 0; }
 .chat-markdown code {
-  background: #e8f0e8;
+  background: var(--border-light);
   padding: 1px 4px;
   border-radius: 2px;
   font-family: 'JetBrains Mono', monospace;
@@ -97,8 +113,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .chat-markdown pre {
-  background: #1b4332;
-  color: #b7e4c7;
+  background: var(--border);
+  color: var(--border-light);
   padding: 12px;
   border-radius: 4px;
   overflow-x: auto;
