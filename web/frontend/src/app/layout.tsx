@@ -14,6 +14,7 @@ const geistMono = localFont({
 });
 
 import ThemeToggle from "@/components/ThemeToggle";
+import ToastContainer from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: "Starlight",
@@ -37,6 +38,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <ThemeToggle />
+        <ToastContainer />
         {children}
       </body>
     </html>

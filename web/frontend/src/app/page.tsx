@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/store";
+import { CartridgeSkeleton } from "@/components/Skeleton";
+import { showToast } from "@/components/Toast";
 
 interface Cartridge {
   id: string;
@@ -12,11 +14,15 @@ interface Cartridge {
 }
 
 export default function LandingPage() {
+  const [loading, setLoading] = useState(true);
   const [cartridges, setCartridges] = useState<Cartridge[]>([]);
   const { user } = useAuthStore();
 
   useEffect(() => {
-    api.listCartridges().then(setCartridges).catch(console.error);
+    api.listCartridges()
+      .then(setCartridges)
+      .catch(() => showToast("Failed to load cartridges", "error"))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -59,7 +65,9 @@ export default function LandingPage() {
       {/* Cartridge Grid */}
       <section className="max-w-6xl mx-auto px-6 pb-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {cartridges.map((c) => (
+          {loading ? (
+            Array.from({ length: 3 }).map((_, i) => <CartridgeSkeleton key={i} />)
+          ) : cartridges.map((c) => (
             <Link key={c.id} href={`/learn/${c.id}`} className="pixel-card p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-2xl">🎮</span>
@@ -72,7 +80,7 @@ export default function LandingPage() {
               <div className="mt-4 pixel-btn text-sm text-center block">Start Learning →</div>
             </Link>
           ))}
-          {cartridges.length === 0 && (
+          {!loading && cartridges.length === 0 && (
             <div className="col-span-full text-center text-[var(--text-muted)] py-12">
               No cartridges available. Run the factory first!
             </div>

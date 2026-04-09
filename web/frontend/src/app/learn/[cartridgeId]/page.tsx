@@ -35,6 +35,7 @@ export default function LearnPage() {
   const currentNode = cartridge?.nodes.find((n) => n.id === currentNodeId);
   const nodeMessages = currentNodeId ? messages[currentNodeId] || [] : [];
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const selectNode = useCallback((nodeId: string) => {
     setCurrentNode(nodeId);
     setQuestion(null);

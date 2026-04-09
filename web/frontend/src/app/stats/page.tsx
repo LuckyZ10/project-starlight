@@ -26,6 +26,7 @@ export default function StatsPage() {
   useEffect(() => {
     if (!token) { router.push("/login"); return; }
     api.getStats().then(setStats).catch(console.error).finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[var(--text-muted)]">Loading...</div>;
