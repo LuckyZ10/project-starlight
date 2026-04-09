@@ -24,9 +24,15 @@ export default function LearnPage() {
   const [input, setInput] = useState("");
   const [showLogin, setShowLogin] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const autoScrollRef = useRef(true);
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
+  // Smart scroll: only auto-scroll if user is near bottom
+  useEffect(() => {
+    if (!chatContainerRef.current || !autoScrollRef.current) return;
+    const el = chatContainerRef.current;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, streamingText]);
 
   useEffect(() => {
     if (token) { api.getCartridge(cartridgeId).then(setCartridge).catch((err) => {
@@ -39,11 +45,51 @@ export default function LearnPage() {
   const currentNode = cartridge?.nodes.find((n) => n.id === currentNodeId);
   const nodeMessages = currentNodeId ? messages[currentNodeId] || [] : [];
 
+  // Auto-select first uncompleted node when cartridge loads
+  useEffect(() => {
+    if (cartridge && !currentNodeId) {
+      const firstIncomplete = cartridge.nodes.find(n => n.status !== 'completed') || cartridge.nodes[0];
+      if (firstIncomplete) {
+        selectNode(firstIncomplete.id);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartridge]);
+
+  // Auto-greet when selecting a new node (no messages yet)
+  useEffect(() => {
+    if (!currentNodeId || !token || !cartridge) return;
+    const existing = messages[currentNodeId];
+    if (existing && existing.length > 0) return; // already has conversation
+    
+    const node = cartridge.nodes.find(n => n.id === currentNodeId);
+    if (!node) return;
+
+    // Send auto-greet
+    const greetMsg = `开始学习：${node.title}`;
+    addUserMessage(currentNodeId, greetMsg);
+    setIsStreaming(true);
+    (async () => {
+      try {
+        for await (const text of chatStream(cartridgeId, currentNodeId, greetMsg, [])) {
+          appendStreamText(text);
+        }
+        finalizeStream(currentNodeId);
+      } catch (err) {
+        appendStreamText(`❌ Connection error. Please try again.`);
+        finalizeStream(currentNodeId);
+      }
+      setIsStreaming(false);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentNodeId, cartridge]);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const selectNode = useCallback((nodeId: string) => {
     setCurrentNode(nodeId);
     setQuestion(null);
-    setSidebarOpen(false); // close sidebar on mobile after selection
+    setSidebarOpen(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const sendMessage = async () => {
@@ -71,15 +117,40 @@ export default function LearnPage() {
 
   const submitAnswer = async (answer: string | number | number[], correct: boolean) => {
     if (!currentNodeId || !currentQuestion) return;
-    await api.submitAnswer({ cartridge_id: cartridgeId, node_id: currentNodeId, question_type: currentQuestion.type, user_answer: String(answer), correct_answer: String(currentQuestion.answer), correct }).catch((err) => {
-      showToast('warning', `Failed to save answer: ${err.message}`);
-    });
-    if (correct) {
-      resetWrongCount();
-      setQuestion(null);
+    const explanation = currentQuestion.explanation || "";
+    const wasCorrect = correct;
+
+    await api.submitAnswer({ cartridge_id: cartridgeId, node_id: currentNodeId, question_type: currentQuestion.type, user_answer: String(answer), correct_answer: String(currentQuestion.answer), correct }).catch(() => {});
+
+    // Clear current question
+    resetWrongCount();
+    setQuestion(null);
+
+    // Show feedback and continue conversation
+    let feedbackMsg: string;
+    if (wasCorrect) {
+      // Check if there's a next node to suggest
+      const nodes = cartridge?.nodes || [];
+      const currentIdx = nodes.findIndex(n => n.id === currentNodeId);
+      const nextNode = nodes[currentIdx + 1];
+      feedbackMsg = `✅ 正确！${explanation}\n\n${nextNode ? `下一个知识点是「${nextNode.title}」，请开始教我。` : '我已经完成了这个节点的学习，请总结一下。'}`;
     } else {
-      addWrongCount();
+      feedbackMsg = `❌ 不对，正确答案是 ${JSON.stringify(currentQuestion.answer)}。${explanation}\n\n请再详细讲解一下这个概念，换个方式让我理解。`;
     }
+
+    addUserMessage(currentNodeId, feedbackMsg);
+    setIsStreaming(true);
+    try {
+      const history = (messages[currentNodeId] || []).map((m) => ({ role: m.role, content: m.content }));
+      for await (const text of chatStream(cartridgeId, currentNodeId, feedbackMsg, history)) {
+        appendStreamText(text);
+      }
+      finalizeStream(currentNodeId);
+    } catch (err) {
+      appendStreamText(`\n\n❌ Error: ${err}`);
+      finalizeStream(currentNodeId);
+    }
+    setIsStreaming(false);
   };
 
   return (
@@ -151,13 +222,24 @@ export default function LearnPage() {
         </div>
 
         {/* Chat messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {!currentNodeId && (
-            <div className="text-center text-[var(--text-muted)] mt-20">
+        <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4" onScroll={() => {
+          if (!chatContainerRef.current) return;
+          const el = chatContainerRef.current;
+          autoScrollRef.current = (el.scrollHeight - el.scrollTop - el.clientHeight) < 100;
+        }}>
+          {!currentNodeId && cartridge && (
+            <div className="text-center text-[var(--text-muted)] mt-20 animate-slide">
               <div className="text-4xl mb-4">🎮</div>
-              <p>Select a node from the sidebar to start learning</p>
-              {/* Mobile hint */}
-              <button onClick={() => setSidebarOpen(true)} className="md:hidden mt-4 pixel-btn pixel-btn-primary text-sm">☰ Open Nodes</button>
+              <p className="mb-2">Welcome to <strong>{cartridge.title}</strong>!</p>
+              <p className="text-sm mb-4">Select a node from the sidebar to start learning</p>
+              {(() => {
+                const first = cartridge.nodes.find(n => n.status !== 'completed');
+                return first ? (
+                  <button onClick={() => selectNode(first.id)} className="pixel-btn pixel-btn-primary text-sm">
+                    ▶ Start from「{first.title}」
+                  </button>
+                ) : null;
+              })()}
             </div>
           )}
 
@@ -174,12 +256,13 @@ export default function LearnPage() {
           {/* Streaming text */}
           {streamingText && (
             <div className="animate-slide">
-              <div className="max-w-[80%] p-4 pixel-card">
+              <div className="max-w-[80%] p-4 pixel-card min-h-[60px]">
                 <div className="chat-markdown text-sm">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
                     {streamingText.replace(/<<QUESTION>>[\s\S]*?<<\/QUESTION>>/g, "").replace(/<<REASONING>>[\s\S]*?<<\/REASONING>>/g, "")}
                   </ReactMarkdown>
                 </div>
+                <span className="inline-block w-2 h-4 bg-[var(--accent)] animate-pulse ml-1" />
               </div>
             </div>
           )}
@@ -193,7 +276,22 @@ export default function LearnPage() {
                   <h3 className="font-bold text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{currentQuestion.question}</h3>
                 </div>
                 {/* Options will be rendered by QuestionCard component */}
-                <QuestionCard question={currentQuestion} onSubmit={submitAnswer} wrongCount={wrongCount} />
+                <QuestionCard 
+                  question={currentQuestion} 
+                  onSubmit={submitAnswer} 
+                  wrongCount={wrongCount}
+                  nextNodeTitle={(() => {
+                    const nodes = cartridge?.nodes || [];
+                    const idx = nodes.findIndex(n => n.id === currentNodeId);
+                    return nodes[idx + 1]?.title;
+                  })()}
+                  onNextNode={(() => {
+                    const nodes = cartridge?.nodes || [];
+                    const idx = nodes.findIndex(n => n.id === currentNodeId);
+                    const next = nodes[idx + 1];
+                    return next ? () => selectNode(next.id) : undefined;
+                  })()}
+                />
               </div>
             </div>
           )}
@@ -201,7 +299,7 @@ export default function LearnPage() {
           {/* Reasoning Card */}
           {currentReasoning && !streamingText && <ReasoningCard reasoning={currentReasoning} />}
 
-          <div ref={chatEndRef} />
+          <div className="h-4" />
         </div>
 
         {/* Input */}
@@ -223,20 +321,40 @@ export default function LearnPage() {
 }
 
 /* Question Card Component */
-function QuestionCard({ question, onSubmit, wrongCount }: { question: NonNullable<ReturnType<typeof useLearningStore.getState>["currentQuestion"]>; onSubmit: (answer: string | number | number[], correct: boolean) => Promise<void>; wrongCount: number }) {
+function QuestionCard({ question, onSubmit, wrongCount, nextNodeTitle, onNextNode }: { 
+  question: NonNullable<ReturnType<typeof useLearningStore.getState>["currentQuestion"]>; 
+  onSubmit: (answer: string | number | number[], correct: boolean) => Promise<void>; 
+  wrongCount: number;
+  nextNodeTitle?: string;
+  onNextNode?: () => void;
+}) {
   const [selected, setSelected] = useState<number | number[]>(question.type === "multi_choice" ? [] : -1);
   const [fillAnswer, setFillAnswer] = useState("");
   const [judgmentAnswer, setJudgmentAnswer] = useState<boolean | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [result, setResult] = useState<{correct: boolean; checked: boolean}>({correct: false, checked: false});
 
   const checkAnswer = () => {
     let correct = false;
-    if (question.type === "single_choice") correct = selected === question.answer;
-    else if (question.type === "multi_choice") correct = JSON.stringify([...(selected as number[])].sort()) === JSON.stringify((question.answer as number[]).sort());
-    else if (question.type === "fill_blank") correct = fillAnswer.toLowerCase().includes(String(question.answer).toLowerCase());
-    else if (question.type === "judgment") correct = judgmentAnswer === question.answer;
+    let answerStr = "";
+    if (question.type === "single_choice") {
+      correct = (selected as number) === question.answer;
+      answerStr = String(selected);
+    } else if (question.type === "multi_choice") {
+      const userSelected = [...(selected as number[])].sort();
+      const correctAnswers = [...(question.answer as number[])].sort();
+      correct = JSON.stringify(userSelected) === JSON.stringify(correctAnswers);
+      answerStr = JSON.stringify(userSelected);
+    } else if (question.type === "fill_blank") {
+      correct = fillAnswer.toLowerCase().includes(String(question.answer).toLowerCase());
+      answerStr = fillAnswer;
+    } else if (question.type === "judgment") {
+      correct = judgmentAnswer === question.answer;
+      answerStr = String(judgmentAnswer);
+    }
     setSubmitted(true);
-    onSubmit(String(selected !== -1 ? selected : judgmentAnswer !== null ? judgmentAnswer : fillAnswer), correct);
+    setResult({ correct, checked: true });
+    onSubmit(answerStr, correct);
   };
 
   return (
@@ -265,7 +383,28 @@ function QuestionCard({ question, onSubmit, wrongCount }: { question: NonNullabl
         </div>
       )}
       {!submitted && (
-        <button onClick={checkAnswer} className="pixel-btn pixel-btn-primary w-full mt-3 text-sm">Submit</button>
+        <button onClick={checkAnswer} disabled={
+          (question.type === 'multi_choice' && (selected as number[]).length === 0) ||
+          (question.type === 'single_choice' && (selected as number) === -1) ||
+          (question.type === 'fill_blank' && fillAnswer === '') ||
+          (question.type === 'judgment' && judgmentAnswer === null)
+        } className="pixel-btn pixel-btn-primary w-full mt-3 text-sm disabled:opacity-50">Submit</button>
+      )}
+      {result.checked && result.correct && (
+        <div className="mt-3 p-3 bg-[#d8f5e2] border-2 border-[var(--success)] rounded text-sm text-center animate-pop">
+          ✅ 正确！{question.explanation || 'Great job!'}
+          {nextNodeTitle && onNextNode && (
+            <button onClick={onNextNode} className="pixel-btn pixel-btn-primary w-full mt-3 text-sm">
+              ▶ 下一个知识点：{nextNodeTitle}
+            </button>
+          )}
+        </div>
+      )}
+      {result.checked && !result.correct && (
+        <div className="mt-3 p-3 bg-red-50 border-2 border-[var(--error)] rounded text-sm text-center animate-pop">
+          ❌ 不对！正确答案是 {JSON.stringify(question.answer)}
+          {question.explanation && <p className="mt-1 text-[var(--text-secondary)]">{question.explanation}</p>}
+        </div>
       )}
       {submitted && wrongCount >= 3 && (
         <div className="mt-3 p-3 bg-yellow-50 border-2 border-[var(--warning)] rounded text-sm">
