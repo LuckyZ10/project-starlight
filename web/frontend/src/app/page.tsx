@@ -32,7 +32,10 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-3">
             {user ? (
-              <span className="text-sm text-[var(--text-secondary)]">{user.email}</span>
+              <>
+                <Link href="/stats" className="pixel-btn text-sm">📊 Stats</Link>
+                <span className="text-sm text-[var(--text-secondary)]">{user.email}</span>
+              </>
             ) : (
               <>
                 <Link href="/login" className="pixel-btn text-sm">Login</Link>

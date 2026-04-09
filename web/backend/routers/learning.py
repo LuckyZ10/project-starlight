@@ -226,3 +226,67 @@ async def complete_node(
     await db.commit()
 
     return {"status": "completed", "score": req.score}
+
+
+@router.get("/stats")
+async def get_learning_stats(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get overall learning statistics for the current user."""
+    from sqlalchemy import func, case
+
+    # Total nodes attempted / completed
+    progress_stmt = select(
+        func.count(LearningProgress.id).label("total_nodes"),
+        func.sum(case((LearningProgress.status == "completed", 1), else_=0)).label("completed_nodes"),
+        func.sum(case((LearningProgress.status == "in_progress", 1), else_=0)).label("in_progress_nodes"),
+        func.avg(case((LearningProgress.status == "completed", LearningProgress.score), else_=None)).label("avg_score"),
+    ).where(LearningProgress.user_id == user.id)
+    result = await db.execute(progress_stmt)
+    row = result.one()
+
+    # Answer stats
+    answer_stmt = select(
+        func.count(Answer.id).label("total_answers"),
+        func.sum(case((Answer.correct == True, 1), else_=0)).label("correct_answers"),
+    ).where(Answer.user_id == user.id)
+    answer_result = await db.execute(answer_stmt)
+    answer_row = answer_result.one()
+
+    # Per-cartridge progress
+    cart_stmt = select(
+        LearningProgress.cartridge_id,
+        func.count(LearningProgress.id).label("total"),
+        func.sum(case((LearningProgress.status == "completed", 1), else_=0)).label("completed"),
+    ).where(LearningProgress.user_id == user.id).group_by(LearningProgress.cartridge_id)
+    cart_result = await db.execute(cart_stmt)
+    cartridges = [
+        {"cartridge_id": r.cartridge_id, "total": r.total, "completed": r.completed}
+        for r in cart_result.all()
+    ]
+
+    # Chat messages count
+    msg_stmt = select(func.count(ChatMessage.id)).where(ChatMessage.user_id == user.id)
+    msg_result = await db.execute(msg_stmt)
+    total_messages = msg_result.scalar() or 0
+
+    # Streak: count distinct days with activity
+    streak_stmt = select(func.count(func.distinct(func.date(ChatMessage.created_at)))).where(
+        ChatMessage.user_id == user.id
+    )
+    streak_result = await db.execute(streak_stmt)
+    active_days = streak_result.scalar() or 0
+
+    return {
+        "total_nodes": row.total_nodes or 0,
+        "completed_nodes": row.completed_nodes or 0,
+        "in_progress_nodes": row.in_progress_nodes or 0,
+        "avg_score": round(row.avg_score, 1) if row.avg_score else 0,
+        "total_answers": answer_row.total_answers or 0,
+        "correct_answers": answer_row.correct_answers or 0,
+        "accuracy": round((answer_row.correct_answers or 0) / max(answer_row.total_answers or 1, 1) * 100, 1),
+        "total_messages": total_messages,
+        "active_days": active_days,
+        "cartridges": cartridges,
+    }

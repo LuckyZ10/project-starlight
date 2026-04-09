@@ -26,6 +26,7 @@ export const api = {
   completeNode: (cartridge_id: string, node_id: string, score: number) =>
     request('/api/learning/complete', { method: 'POST', body: JSON.stringify({ cartridge_id, node_id, score }) }),
   getProgress: (cartridge_id: string) => request(`/api/learning/progress/${cartridge_id}`),
+  getStats: () => request('/api/learning/stats'),
 };
 
 export async function* chatStream(
