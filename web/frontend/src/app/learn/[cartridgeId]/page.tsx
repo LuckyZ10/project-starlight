@@ -26,7 +26,7 @@ const StreamingText = memo(function StreamingText({ text }: { text: string }) {
 const MarkdownContent = memo(function MarkdownContent({ content }: { content: string }) {
   return (
     <div className="chat-markdown text-sm">
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { output: 'html', throwOnError: false }]]}>{content}</ReactMarkdown>
     </div>
   );
 });
