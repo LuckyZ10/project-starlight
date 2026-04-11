@@ -275,19 +275,17 @@ const QuestionCard = memo(function QuestionCard({ question, onSubmit, nextNodeTi
         </button>
       )}
 
-      {result.checked && result.correct && (
+      {result.checked && result.correct && nextNodeTitle && onNextNode && (
         <div className="mt-3 p-4 bg-[var(--success)]/5 border border-[var(--success)]/30 rounded-xl animate-pop">
           <div className="flex items-center gap-2 mb-1">
             <CheckCircleIcon />
             <span className="text-sm font-semibold text-[var(--success)]">Correct!</span>
           </div>
           {question.explanation && <p className="text-xs text-[var(--text-secondary)] mt-1">{question.explanation}</p>}
-          {nextNodeTitle && onNextNode && (
-            <button onClick={onNextNode}
-              className="btn btn-primary w-full mt-3 text-xs gap-1.5">
-              <PlayIcon /> Next: {nextNodeTitle}
-            </button>
-          )}
+          <button onClick={onNextNode}
+            className="btn btn-primary w-full mt-3 text-xs gap-1.5">
+            <PlayIcon /> 开始下一个：{nextNodeTitle}
+          </button>
         </div>
       )}
       {result.checked && !result.correct && (
@@ -452,28 +450,65 @@ export default function LearnPage() {
     const nodes = cartridge?.nodes || [];
     const idx = nodes.findIndex(n => n.id === currentNodeId);
     const nextNode = nodes[idx + 1];
-    const feedbackMsg = correct
-      ? `✅ 正确！${explanation}\n\n${nextNode ? `下一个知识点是「${nextNode.title}」，请开始教我。` : '我已经完成了，请总结。'}`
-      : `❌ 不对，正确答案是 ${JSON.stringify(currentQuestion.answer)}。${explanation}\n\n请换个方式讲解。`;
 
-    addUserMessage(currentNodeId, feedbackMsg);
-    setIsStreaming(true);
-    try {
-      const history = (messages[currentNodeId] || []).map((m) => ({ role: m.role, content: m.content }));
-      for await (const text of chatStream(cartridgeId, currentNodeId, feedbackMsg, history)) {
-        appendStreamText(text);
-      }
+    if (correct) {
+      // 答对：只记录本地反馈，不触发 AI 回复，等用户手动选择下一步
+      const feedbackText = nextNode
+        ? `✅ 正确！${explanation}`
+        : `✅ 正确！${explanation}\n✨ 节点已完成！`;
+      addUserMessage(currentNodeId, feedbackText);
       finalizeStream(currentNodeId);
-    } catch { appendStreamText(`\n\nError`); finalizeStream(currentNodeId); }
-    setIsStreaming(false);
+    } else {
+      // 答错：让 AI 换个方式讲解
+      const feedbackMsg = `❌ 不对，正确答案是 ${JSON.stringify(currentQuestion.answer)}。${explanation}\n\n请换个方式讲解。`;
+      addUserMessage(currentNodeId, feedbackMsg);
+      setIsStreaming(true);
+      try {
+        const history = (messages[currentNodeId] || []).map((m) => ({ role: m.role, content: m.content }));
+        for await (const text of chatStream(cartridgeId, currentNodeId, feedbackMsg, history)) {
+          appendStreamText(text);
+        }
+        finalizeStream(currentNodeId);
+      } catch { appendStreamText(`\n\nError`); finalizeStream(currentNodeId); }
+      setIsStreaming(false);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentNodeId, currentQuestion, cartridgeId, cartridge]);
 
   const nextNodeInfo = useMemo(() => {
     const nodes = cartridge?.nodes || [];
     const idx = nodes.findIndex(n => n.id === currentNodeId);
-    return { title: nodes[idx + 1]?.title, select: nodes[idx + 1] ? () => selectNode(nodes[idx + 1].id) : undefined };
-  }, [cartridge, currentNodeId, selectNode]);
+    const nextNode = nodes[idx + 1];
+    return {
+      title: nextNode?.title,
+      select: nextNode ? () => selectNode(nextNode.id) : undefined,
+      start: nextNode ? () => {
+        selectNode(nextNode.id);
+        // Wait for node selection, then start the lesson
+        setTimeout(() => {
+          const node = cartridge?.nodes.find(n => n.id === nextNode.id);
+          if (!node) return;
+          
+          // Send "开始学习：XXX" message to start AI teaching
+          addUserMessage(nextNode.id, `开始学习：${node.title}`);
+          setIsStreaming(true);
+          (async () => {
+            try {
+              const history = (messages[nextNode.id] || []).map((m) => ({ role: m.role, content: m.content }));
+              for await (const text of chatStream(cartridgeId, nextNode.id, `开始学习：${node.title}`, history)) {
+                appendStreamText(text);
+              }
+              finalizeStream(nextNode.id);
+            } catch {
+              appendStreamText(`\n\nError`);
+              finalizeStream(nextNode.id);
+            }
+            setIsStreaming(false);
+          })();
+        }, 100);
+      } : undefined
+    };
+  }, [cartridge, currentNodeId, selectNode, cartridgeId]);
 
   const displayStreaming = useMemo(() =>
     deferredStreaming.replace(/<<QUESTION>>[\s\S]*?<<\/QUESTION>>/g, "").replace(/<<REASONING>>[\s\S]*?<<\/REASONING>>/g, ""),
@@ -604,7 +639,7 @@ export default function LearnPage() {
                   question={currentQuestion}
                   onSubmit={submitAnswer}
                   nextNodeTitle={nextNodeInfo.title}
-                  onNextNode={nextNodeInfo.select}
+                  onNextNode={nextNodeInfo.start}
                 />
               </div>
             </div>
