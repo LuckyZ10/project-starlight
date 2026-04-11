@@ -32,33 +32,27 @@ interface CartridgeData {
 }
 
 const NODE_W = 220;
-const NODE_H = 80;
+const NODE_H = 72;
 const GAP_X = 100;
-const GAP_Y = 30;
+const GAP_Y = 24;
 
 function computeLayout(nodes: NodeInfo[]) {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-
-  // Compute depth (max distance from root)
   const depth = new Map<string, number>();
   const visited = new Set<string>();
 
   function getDepth(id: string): number {
     if (depth.has(id)) return depth.get(id)!;
-    if (visited.has(id)) return 0; // cycle guard
+    if (visited.has(id)) return 0;
     visited.add(id);
     const node = nodeMap.get(id);
-    if (!node || node.prerequisites.length === 0) {
-      depth.set(id, 0);
-      return 0;
-    }
+    if (!node || node.prerequisites.length === 0) { depth.set(id, 0); return 0; }
     const d = Math.max(...node.prerequisites.map(getDepth)) + 1;
     depth.set(id, d);
     return d;
   }
   nodes.forEach((n) => getDepth(n.id));
 
-  // Group by depth
   const groups = new Map<number, string[]>();
   nodes.forEach((n) => {
     const d = depth.get(n.id) ?? 0;
@@ -67,67 +61,50 @@ function computeLayout(nodes: NodeInfo[]) {
   });
 
   const positions = new Map<string, { x: number; y: number }>();
-  const sortedDepths = Array.from(groups.keys()).sort((a, b) => a - b);
-  sortedDepths.forEach((d) => {
-    const ids = groups.get(d)!;
-    ids.forEach((id, i) => {
-      positions.set(id, {
-        x: d * (NODE_W + GAP_X),
-        y: i * (NODE_H + GAP_Y),
-      });
+  Array.from(groups.keys()).sort((a, b) => a - b).forEach((d) => {
+    groups.get(d)!.forEach((id, i) => {
+      positions.set(id, { x: d * (NODE_W + GAP_X), y: i * (NODE_H + GAP_Y) });
     });
   });
 
   return positions;
 }
 
-function statusColor(status: string) {
-  if (status === "completed") return "#55efc4";
-  if (status === "in_progress") return "#ffeaa7";
-  return "#dfe6e9";
-}
-
-function statusEmoji(status: string) {
-  if (status === "completed") return "🟩";
-  if (status === "in_progress") return "🟨";
-  return "⬜";
-}
-
 function DagNode({ data }: NodeProps) {
-  const nd = data as unknown as {
-    title: string;
-    difficulty: number;
-    status: string;
-    nodeId: string;
-  };
+  const nd = data as unknown as { title: string; difficulty: number; status: string; nodeId: string };
+  const isCompleted = nd.status === "completed";
+  const isProgress = nd.status === "in_progress";
+
   return (
     <div
-      className="cursor-pointer rounded-lg border-2 px-3 py-2"
+      className="cursor-pointer rounded-xl border bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md"
       style={{
         width: NODE_W,
         height: NODE_H,
-        borderColor: "#00b894",
-        background: statusColor(nd.status),
-        fontFamily: "'JetBrains Mono', monospace",
+        borderColor: isCompleted ? "var(--success)" : isProgress ? "var(--warning)" : "var(--border)",
+        borderWidth: isCompleted || isProgress ? 2 : 1,
       }}
     >
-      <Handle type="target" position={Position.Left} style={{ background: "#00b894" }} />
-      <div className="flex items-center gap-1 mb-1">
-        <span>{statusEmoji(nd.status)}</span>
-        <span className="text-xs font-bold truncate">{nd.title}</span>
+      <Handle type="target" position={Position.Left} style={{ background: "var(--accent)", width: 8, height: 8, border: 'none' }} />
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isCompleted ? "bg-emerald-400" : isProgress ? "bg-amber-400" : "bg-gray-300"}`} />
+        <span className="text-xs font-semibold truncate">{nd.title}</span>
       </div>
-      <div className="flex items-center gap-2 text-xs text-gray-600">
-        <span className="px-1 rounded" style={{ background: "#00b894", color: "#fff" }}>
+      <div className="flex items-center gap-2 text-[11px] text-gray-500">
+        <span className="px-1.5 py-0.5 rounded-md text-[10px] font-medium" style={{ background: "var(--accent)", color: "#fff" }}>
           Lv.{nd.difficulty}
         </span>
-        <span>{nd.nodeId}</span>
+        <span className="truncate">{nd.nodeId}</span>
       </div>
-      <Handle type="source" position={Position.Right} style={{ background: "#00b894" }} />
+      <Handle type="source" position={Position.Right} style={{ background: "var(--accent)", width: 8, height: 8, border: 'none' }} />
     </div>
   );
 }
 
 const nodeTypes = { dagNode: DagNode };
+
+function ChevronLeftIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>; }
+function MapIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>; }
 
 export default function DagPage() {
   const params = useParams();
@@ -149,8 +126,8 @@ export default function DagPage() {
 
   if (!cartridge) {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ background: "#f5f6fa" }}>
-        <div className="text-2xl">⏳ Loading DAG...</div>
+      <div className="h-screen flex items-center justify-center bg-[var(--bg-primary)]">
+        <div className="text-sm text-[var(--text-muted)]">Loading...</div>
       </div>
     );
   }
@@ -170,24 +147,22 @@ export default function DagPage() {
       source: pre,
       target: n.id,
       animated: true,
-      style: { stroke: "#00b894", strokeWidth: 2 },
+      style: { stroke: "var(--accent)", strokeWidth: 1.5 },
     })),
   );
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "#f5f6fa" }}>
-      <div className="px-3 md:px-4 py-2 md:py-3 border-b-2 border-[var(--border)] bg-white flex items-center gap-2 md:gap-4 flex-wrap">
-        <button
-          onClick={() => router.push(`/learn/${cartridgeId}`)}
-          className="pixel-btn pixel-btn-primary text-sm"
-        >
-          ← Back
+    <div className="h-screen flex flex-col bg-[var(--bg-primary)]">
+      <div className="px-3 md:px-4 py-2.5 border-b border-[var(--border)] glass flex items-center gap-3">
+        <button onClick={() => router.push(`/learn/${cartridgeId}`)} className="btn btn-ghost text-xs gap-1 px-2 py-1.5">
+          <ChevronLeftIcon /> Back
         </button>
-        <h2 className="font-bold text-sm truncate" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          🗺️ {cartridge.title}
-        </h2>
+        <div className="flex items-center gap-1.5">
+          <MapIcon />
+          <h2 className="font-semibold text-sm truncate">{cartridge.title}</h2>
+        </div>
         <span className="text-xs text-[var(--text-muted)] ml-auto">
-          {cartridge.progress.completed}/{cartridge.progress.total} ✅
+          {cartridge.progress.completed}/{cartridge.progress.total}
         </span>
       </div>
       <div className="flex-1">
@@ -198,9 +173,9 @@ export default function DagPage() {
           onNodeClick={onNodeClick}
           fitView
           minZoom={0.2}
-          style={{ background: "#f5f6fa" }}
+          style={{ background: "var(--bg-primary)" }}
         >
-          <Background color="#00b894" gap={20} size={1} />
+          <Background color="var(--border)" gap={20} size={1} />
           <Controls />
         </ReactFlow>
       </div>

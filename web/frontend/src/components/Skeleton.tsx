@@ -1,19 +1,12 @@
 export default function ChatSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">
-      {/* AI message skeleton */}
-      <div className="max-w-[80%] p-4 pixel-card">
-        <div className="h-3 bg-[var(--border-light)] rounded w-3/4 mb-3" />
-        <div className="h-3 bg-[var(--border-light)] rounded w-1/2 mb-3" />
-        <div className="h-3 bg-[var(--border-light)] rounded w-2/3" />
-      </div>
-      {/* Question skeleton */}
-      <div className="max-w-lg p-6 pixel-card">
-        <div className="h-4 bg-[var(--border-light)] rounded w-2/3 mb-4" />
-        <div className="space-y-2">
-          <div className="h-10 bg-[var(--border-light)] rounded" />
-          <div className="h-10 bg-[var(--border-light)] rounded" />
-          <div className="h-10 bg-[var(--border-light)] rounded" />
+      <div className="flex gap-2.5">
+        <div className="w-7 h-7 rounded-full bg-[var(--border)] shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3 bg-[var(--border)] rounded w-3/4" />
+          <div className="h-3 bg-[var(--border)] rounded w-1/2" />
+          <div className="h-3 bg-[var(--border)] rounded w-2/3" />
         </div>
       </div>
     </div>
@@ -22,13 +15,15 @@ export default function ChatSkeleton() {
 
 export function CartridgeSkeleton() {
   return (
-    <div className="pixel-card p-6 animate-pulse">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 bg-[var(--border-light)] rounded" />
-        <div className="h-5 bg-[var(--border-light)] rounded w-40" />
+    <div className="card p-5 animate-pulse">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="w-10 h-10 rounded-xl bg-[var(--border)]" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-[var(--border)] rounded w-3/4" />
+          <div className="h-3 bg-[var(--border)] rounded w-1/3" />
+        </div>
       </div>
-      <div className="h-3 bg-[var(--border-light)] rounded w-24 mb-4" />
-      <div className="h-9 bg-[var(--border-light)] rounded" />
+      <div className="h-9 bg-[var(--border)] rounded-lg" />
     </div>
   );
 }
@@ -37,7 +32,7 @@ export function SidebarSkeleton() {
   return (
     <div className="space-y-2 p-4 animate-pulse">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="h-10 bg-[var(--border-light)] rounded" />
+        <div key={i} className="h-10 bg-[var(--border)] rounded-lg" />
       ))}
     </div>
   );
