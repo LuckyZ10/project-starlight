@@ -435,10 +435,17 @@ export default function LearnPage() {
   const submitAnswer = useCallback(async (answer: string | number | number[], correct: boolean) => {
     if (!currentNodeId || !currentQuestion) return;
     const explanation = currentQuestion.explanation || "";
+    
+    // Convert answer to string properly (arrays need JSON.stringify)
+    const answerStr = Array.isArray(answer) ? JSON.stringify(answer) : String(answer);
+    const correctAnswerStr = Array.isArray(currentQuestion.answer) 
+      ? JSON.stringify(currentQuestion.answer) 
+      : String(currentQuestion.answer);
+    
     await api.submitAnswer({
       cartridge_id: cartridgeId, node_id: currentNodeId,
-      question_type: currentQuestion.type, user_answer: String(answer),
-      correct_answer: String(currentQuestion.answer), correct,
+      question_type: currentQuestion.type, user_answer: answerStr,
+      correct_answer: correctAnswerStr, correct,
     }).catch(() => {});
 
     setQuestion(null);
