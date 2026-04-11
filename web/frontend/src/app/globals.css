@@ -101,6 +101,41 @@ h1, h2, h3, h4, h5, h6 {
   overscroll-behavior: contain;
 }
 
+/* Float animation for welcome */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Staggered message entrance */
+.chat-message-enter {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Smooth glass effect for top bar */
+.backdrop-blur-lg {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* Touch feedback */
+button:active:not(:disabled) {
+  transition: transform 0.1s ease;
+}
+
+/* Smooth focus transitions */
+input:focus {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Disable text selection on buttons for better mobile UX */
+button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Chat markdown */
 .chat-markdown h1, .chat-markdown h2, .chat-markdown h3 { margin: 8px 0 4px; }
 .chat-markdown p { margin: 4px 0; line-height: 1.6; }
