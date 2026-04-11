@@ -26,21 +26,21 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[var(--bg-primary)]">
       {/* Header */}
-      <header className="border-b-2 border-[var(--border)] px-6 py-4 bg-white">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded bg-[var(--accent)] flex items-center justify-center text-white font-bold text-lg pixel-border" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+      <header className="border-b-2 border-[var(--border)] bg-white sticky top-0 z-20">
+        <div className="max-w-5xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-[var(--accent)] flex items-center justify-center text-white font-bold text-base" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
               S
             </div>
-            <span className="text-xl font-bold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Starlight</span>
+            <span className="text-lg font-bold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Starlight</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {user ? (
               <>
                 <Link href="/stats" className="pixel-btn text-sm">📊 Stats</Link>
-                <span className="text-sm text-[var(--text-secondary)]">{user.email}</span>
+                <span className="text-sm text-[var(--text-secondary)] hidden sm:inline">{user.email}</span>
               </>
             ) : (
               <>
@@ -53,31 +53,36 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 py-16 text-center">
-        <h1 className="text-4xl font-bold mb-4">
+      <section className="max-w-5xl mx-auto px-4 md:px-6 py-12 md:py-20 text-center">
+        <h1 className="text-3xl md:text-4xl font-bold mb-4">
           Learn with <span className="text-[var(--accent)]">Starlight</span>
         </h1>
-        <p className="text-[var(--text-secondary)] text-lg max-w-xl mx-auto">
-          Choose a learning cartridge and master topics through interactive conversations with AI
+        <p className="text-[var(--text-secondary)] text-base md:text-lg max-w-lg mx-auto leading-relaxed">
+          Master topics through interactive conversations with AI
         </p>
       </section>
 
-      {/* Cartridge Grid */}
-      <section className="max-w-6xl mx-auto px-6 pb-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Grid */}
+      <section className="max-w-5xl mx-auto px-4 md:px-6 pb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => <CartridgeSkeleton key={i} />)
           ) : cartridges.map((c) => (
-            <Link key={c.id} href={`/learn/${c.id}`} className="pixel-card p-6 hover:shadow-lg transition-shadow">
+            <Link key={c.id} href={`/learn/${c.id}`}
+              className="pixel-card p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-2xl">🎮</span>
-                <h2 className="font-bold text-lg" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{c.title}</h2>
+                <h2 className="font-bold text-base group-hover:text-[var(--accent)] transition-colors" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                  {c.title}
+                </h2>
               </div>
-              <div className="flex items-center gap-4 text-sm text-[var(--text-secondary)]">
+              <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
                 <span>📖 {c.node_count} nodes</span>
                 <span>v{c.version}</span>
               </div>
-              <div className="mt-4 pixel-btn text-sm text-center block">Start Learning →</div>
+              <div className="mt-4 text-center py-2 text-sm font-semibold text-[var(--accent)] group-hover:bg-[var(--accent)] group-hover:text-white rounded-lg border-2 border-[var(--border)] group-hover:border-[var(--accent)] transition-all">
+                Start Learning →
+              </div>
             </Link>
           ))}
           {!loading && cartridges.length === 0 && (
