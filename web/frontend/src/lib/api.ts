@@ -67,11 +67,28 @@ async function request(path: string, opts: RequestInit = {}, retries = MAX_RETRI
 export { ApiError };
 
 export const api = {
+  // Auth
   register: (email: string, password: string) =>
     request('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
   login: (email: string, password: string) =>
     request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   getMe: () => request('/api/auth/me'),
+
+  // Topics (new API)
+  listTopics: () => request('/api/v1/topics/'),
+  getTopic: (id: string) => request(`/api/v1/topics/${id}`),
+  createTopic: (data: { name: string; description?: string; platforms?: string[]; config?: Record<string, any> }) =>
+    request('/api/v1/topics/', { method: 'POST', body: JSON.stringify(data) }),
+  updateTopic: (id: string, data: { name?: string; description?: string; platforms?: string[]; config?: Record<string, any>; status?: string }) =>
+    request(`/api/v1/topics/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTopic: (id: string) => request(`/api/v1/topics/${id}`, { method: 'DELETE' }),
+  generatePlan: (id: string) => request(`/api/v1/topics/${id}/plan`, { method: 'POST' }),
+  generateContent: (id: string) => request(`/api/v1/topics/${id}/content`, { method: 'POST' }),
+  getReport: (id: string) => request(`/api/v1/topics/${id}/report`),
+  publishTopic: (id: string, data?: { platforms?: string[] }) =>
+    request(`/api/v1/topics/${id}/publish`, { method: 'POST', body: JSON.stringify(data || {}) }),
+
+  // Legacy Cartridge API (for backward compatibility)
   listCartridges: () => request('/api/cartridges'),
   getCartridge: (id: string) => request(`/api/cartridges/${id}`),
   getNodeContent: (cid: string, nid: string) => request(`/api/cartridges/${cid}/nodes/${nid}`),
